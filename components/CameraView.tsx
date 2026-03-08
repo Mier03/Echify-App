@@ -43,17 +43,28 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
 
-          await new Promise<void>((resolve) => {
+          // await new Promise<void>((resolve) => {
+          //   videoRef.current.onloadedmetadata = () => {
+          //     videoRef.current
+          //       .play()
+          //       .then(() => resolve())
+          //       .catch((err: any) => {
+          //         console.log("Video play error:", err);
+          //         resolve();
+          //       });
+          //   };
+          // });
+
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            
             videoRef.current.onloadedmetadata = () => {
-              videoRef.current
-                .play()
-                .then(() => resolve())
-                .catch((err: any) => {
-                  console.log("Video play error:", err);
-                  resolve();
-                });
+              videoRef.current.play().catch((_e: Error) => console.log("Play interrupted"));
             };
-          });
+
+            setIsStreaming(true);
+            setIsInitialized(true);
+          }
         }
 
         console.log("✅ Camera stream started");
@@ -266,6 +277,7 @@ const webStyles = {
     height: "100%",
     objectFit: "cover",
     backgroundColor: "#000",
+    transform: "scaleX(-1)",
   },
   hiddenCanvas: {
     display: "none",
