@@ -16,13 +16,18 @@ sudo chmod 777 /dev/video10
 echo "🚀 Starting Echify..."
 
 # -------------------------
+# 0. Activate venv
+# -------------------------
+source "$BASE_DIR/backend/venv/bin/activate"
+
+# -------------------------
 # 1. Start AI Backend
 # -------------------------
 echo "🧠 Starting AI Backend..."
-
 cd "$BASE_DIR/backend"
 
-$BASE_DIR/backend/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+# Use venv python
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 
 BACKEND_PID=$!
 
@@ -37,9 +42,10 @@ fi
 # 2. Start Camera Engine
 # -------------------------
 echo "📷 Starting Camera Engine and UI..."
-
 cd "$BASE_DIR/hardware/camera"
-python3 camera_engine.py
+
+# Use venv python here too
+python camera_engine.py
 
 # -------------------------
 # Cleanup
