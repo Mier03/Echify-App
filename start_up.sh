@@ -72,7 +72,7 @@ echo "✅ Web server running"
 echo "🚀 Starting Backend..."
 cd "$BASE_DIR/backend" || exit 1
 source "$BASE_DIR/venv/bin/activate"
-uvicorn main:app --host 0.0.0.0 --port 8000 > "$BASE_DIR/backend.log" 2>&1 &
+uvicorn src.main:app --host 0.0.0.0 --port 8000 > "$BASE_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 
 sleep 5
