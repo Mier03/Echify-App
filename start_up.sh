@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BASE_DIR="/home/sms/Echify-App"
-MODEL_PATH="$BASE_DIR/backend/model"
+MODEL_PATH="$BASE_DIR/backend/models"
 
 echo "🔄 Updating project from GitHub..."
 cd "$BASE_DIR" || exit 1
