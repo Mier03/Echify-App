@@ -1,5 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View, ActivityIndicator, Platform } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  ActivityIndicator,
+  TouchableOpacity,
+  Linking,
+  Platform,
+} from "react-native";
+import {
+  CameraView as ExpoCameraView,
+  useCameraPermissions,
+} from "expo-camera";
 import { sendFrame } from "../services/socket";
 
 interface CameraViewProps {
@@ -7,179 +19,194 @@ interface CameraViewProps {
 }
 
 export default function CameraView({ onPrediction }: CameraViewProps) {
-  const videoRef = useRef<any>(null);
-  const canvasRef = useRef<any>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<any>(null);
 
+  const [isCapturing, setIsCapturing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // -----------------------
+  // Camera permission
+  // -----------------------
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    let interval: ReturnType<typeof setInterval> | null = null;
     let isMounted = true;
 
-    const startCamera = async () => {
-      if (Platform.OS !== "web") {
-        setErrorMessage("This camera setup is intended for the Raspberry Pi web app running in Chromium.");
-        setIsInitialized(true);
-        return;
-      }
+    const initializeCamera = async () => {
+      if (isInitialized) return;
 
       try {
-        console.log("📷 Requesting browser camera access...");
-
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: 640,
-            height: 480,
-            facingMode: "user",
-          },
-          audio: false,
-        });
-
-        if (!isMounted) return;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-
-          // await new Promise<void>((resolve) => {
-          //   videoRef.current.onloadedmetadata = () => {
-          //     videoRef.current
-          //       .play()
-          //       .then(() => resolve())
-          //       .catch((err: any) => {
-          //         console.log("Video play error:", err);
-          //         resolve();
-          //       });
-          //   };
-          // });
-
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            
-            videoRef.current.onloadedmetadata = () => {
-              videoRef.current.play().catch((_e: Error) => console.log("Play interrupted"));
-            };
-
-            setIsStreaming(true);
-            setIsInitialized(true);
-          }
+        if (permission?.granted === true) {
+          if (isMounted) setIsInitialized(true);
+          return;
         }
 
-        console.log("✅ Camera stream started");
-        setIsStreaming(true);
-        setIsInitialized(true);
+        // If browser/app already denied and cannot ask again
+        if (permission?.granted === false && permission?.canAskAgain === false) {
+          if (isMounted) setIsInitialized(true);
+          return;
+        }
 
-        interval = setInterval(() => {
-          captureAndSendFrame();
-        }, 300);
-      } catch (error: any) {
-        console.error("❌ Camera access error:", error);
-        setErrorMessage(
-          error?.message || "Failed to access Raspberry Pi camera from Chromium."
-        );
-        setIsInitialized(true);
+        const result = await requestPermission();
+        console.log("📷 Permission result:", result);
+
+        if (isMounted) setIsInitialized(true);
+      } catch (error) {
+        console.error("❌ Error requesting camera permission:", error);
+        if (isMounted) setIsInitialized(true);
       }
     };
 
-    const captureAndSendFrame = () => {
-      try {
-        if (!videoRef.current || !canvasRef.current) return;
-
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-
-        if (!ctx) return;
-        if (video.videoWidth === 0 || video.videoHeight === 0) return;
-
-        canvas.width = 640;
-        canvas.height = 480;
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
-
-        if (base64) {
-          sendFrame(base64);
-        }
-      } catch (err) {
-        console.log("📸 Frame capture error:", err);
-      }
-    };
-
-    startCamera();
+    const timer = setTimeout(() => {
+      initializeCamera();
+    }, 300);
 
     return () => {
       isMounted = false;
-
-      if (interval) {
-        clearInterval(interval);
-      }
-
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-
-      setIsStreaming(false);
+      clearTimeout(timer);
     };
-  }, []);
+  }, [permission, requestPermission, isInitialized]);
 
+  // -----------------------
+  // Capture loop
+  // -----------------------
+  useEffect(() => {
+    if (!isInitialized || !permission?.granted) {
+      console.log("⏸️ Skipping capture:", {
+        isInitialized,
+        hasPermission: permission?.granted,
+      });
+      return;
+    }
+
+    let isActive = true;
+    setIsCapturing(true);
+    console.log("▶️ Starting capture loop");
+
+    const captureLoop = async () => {
+      // let preview settle first
+      await new Promise((r) => setTimeout(r, 1000));
+
+      while (isActive) {
+        try {
+          if (!cameraRef.current) {
+            await new Promise((r) => setTimeout(r, 300));
+            continue;
+          }
+
+          const photo = await cameraRef.current.takePictureAsync({
+            base64: true,
+            quality: 0.7,
+            skipProcessing: true,
+          });
+
+          if (photo?.base64) {
+            sendFrame(photo.base64);
+          }
+        } catch (err) {
+          console.log("📸 Frame capture error:", err);
+        }
+
+        // ~2 FPS
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    };
+
+    captureLoop();
+
+    return () => {
+      console.log("⏹️ Stopping capture loop");
+      isActive = false;
+      setIsCapturing(false);
+    };
+  }, [isInitialized, permission?.granted]);
+
+  // -----------------------
+  // Actions
+  // -----------------------
+  const openSettings = () => {
+    Linking.openSettings();
+  };
+
+  const retryPermission = async () => {
+    try {
+      const result = await requestPermission();
+      console.log("🔄 Retry permission result:", result);
+    } catch (error) {
+      console.error("❌ Retry permission error:", error);
+    }
+  };
+
+  // -----------------------
+  // RENDER
+  // -----------------------
   if (!isInitialized) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={styles.loadingText}>Initializing Raspberry Pi camera...</Text>
-        <Text style={styles.loadingSubtext}>Opening browser camera stream...</Text>
+        <Text style={styles.loadingText}>Initializing camera...</Text>
+        <Text style={styles.loadingSubtext}>
+          {permission?.granted ? "Loading..." : "Checking permissions..."}
+        </Text>
       </View>
     );
   }
 
-  if (errorMessage) {
+  if (!permission?.granted) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.errorIcon}>📷</Text>
-        <Text style={styles.errorTitle}>Camera Error</Text>
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <Text style={styles.errorSubtext}>
-          Make sure camera_engine.py is running and Chromium has camera access.
-        </Text>
-      </View>
-    );
-  }
-
-  if (Platform.OS !== "web") {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorIcon}>⚠️</Text>
-        <Text style={styles.errorTitle}>Unsupported Platform</Text>
+        <Text style={styles.errorTitle}>Camera Access Required</Text>
         <Text style={styles.errorText}>
-          This version is for the Raspberry Pi Chromium web build only.
+          This app needs camera permission to recognize sign language gestures.
         </Text>
+
+        <Text style={styles.errorSubtext}>
+          {Platform.OS === "web"
+            ? "Please allow camera access in your browser."
+            : "Please grant camera permission in your device settings."}
+        </Text>
+
+        {permission?.canAskAgain === false && Platform.OS !== "web" ? (
+          <TouchableOpacity style={styles.settingsButton} onPress={openSettings}>
+            <Text style={styles.settingsButtonText}>Open Settings</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        <TouchableOpacity
+          style={
+            permission?.canAskAgain === false && Platform.OS !== "web"
+              ? styles.retryButton
+              : styles.settingsButton
+          }
+          onPress={retryPermission}
+        >
+          <Text
+            style={
+              permission?.canAskAgain === false && Platform.OS !== "web"
+                ? styles.retryButtonText
+                : styles.settingsButtonText
+            }
+          >
+            Try Again
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        style={webStyles.video as any}
-      />
-
-      <canvas
-        ref={canvasRef}
-        style={webStyles.hiddenCanvas as any}
+      <ExpoCameraView
+        ref={cameraRef}
+        style={styles.camera}
+        facing="front"
+        mute={true}
       />
 
       <View style={styles.statusIndicator}>
-        <View style={[styles.statusDot, isStreaming && styles.statusDotActive]} />
+        <View style={[styles.statusDot, isCapturing && styles.statusDotActive]} />
         <Text style={styles.statusText}>
-          {isStreaming ? "Capturing..." : "Idle"}
+          {isCapturing ? "Capturing..." : "Idle"}
         </Text>
       </View>
     </View>
@@ -190,9 +217,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    position: "relative",
-    overflow: "hidden",
-    borderRadius: 20,
+  },
+  camera: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -206,13 +233,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#333",
     fontWeight: "600",
-    textAlign: "center",
   },
   loadingSubtext: {
     marginTop: 8,
     fontSize: 14,
     color: "#666",
-    textAlign: "center",
   },
   errorIcon: {
     fontSize: 64,
@@ -242,6 +267,28 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontStyle: "italic",
   },
+  settingsButton: {
+    marginTop: 24,
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 8,
+  },
+  settingsButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  retryButton: {
+    marginTop: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+  },
+  retryButtonText: {
+    color: "#4CAF50",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   statusIndicator: {
     position: "absolute",
     top: 10,
@@ -252,7 +299,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    zIndex: 10,
   },
   statusDot: {
     width: 8,
@@ -270,16 +316,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-
-const webStyles = {
-  video: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    backgroundColor: "#000",
-    transform: "scaleX(-1)",
-  },
-  hiddenCanvas: {
-    display: "none",
-  },
-};
