@@ -24,21 +24,6 @@ fi
 # ---------------------------
 # Build Web UI
 # ---------------------------
-echo "🔨 Building Web UI..."
-rm -rf "$BASE_DIR/dist"
-npx expo export -p web
-
-if [ $? -ne 0 ]; then
-    echo "❌ Web build failed"
-    exit 1
-fi
-
-if [ ! -f "$BASE_DIR/dist/index.html" ]; then
-    echo "❌ dist/index.html not found after build"
-    exit 1
-fi
-
-echo "✅ Web UI built successfully"
 
 # ---------------------------
 # Start Web Server (Port 3000)
