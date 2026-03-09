@@ -26,6 +26,7 @@ pkill -f "python3 -m http.server 3000" 2>/dev/null
 pkill -f "uvicorn main:app --host 0.0.0.0 --port 8000" 2>/dev/null
 pkill -f "camera_engine.py" 2>/dev/null
 pkill -f "chromium.*localhost:3000" 2>/dev/null
+sudo modprobe -r v4l2loopback 2>/dev/null
 
 sleep 2
 
