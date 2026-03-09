@@ -103,7 +103,6 @@ chromium \
   --app=http://localhost:3000 \
   --use-fake-ui-for-media-stream \
   --autoplay-policy=no-user-gesture-required \
-  --allow-file-access-from-files \
   --no-sandbox \
   --test-type \
   --kiosk &
