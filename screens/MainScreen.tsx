@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
 import { connectSocket, closeSocket } from "../services/socket";
 import { sendAudioForSTT } from "../services/stt";
@@ -15,10 +16,12 @@ import CameraComponent from "../components/CameraView";
 export default function MainScreen() {
   const [activeTab, setActiveTab] = useState<"sign" | "speech">("sign");
 
+  // Sign-to-speech state
   const [typedText, setTypedText] = useState("");
   const [finalWord, setFinalWord] = useState("");
   const newWordStartedRef = useRef(false);
 
+  // Speech-to-text state
   const [isRecording, setIsRecording] = useState(false);
   const [sttText, setSttText] = useState("Say something...");
 
@@ -31,34 +34,25 @@ export default function MainScreen() {
   const isUploadingRef = useRef(false);
   const shouldContinueSpeechRef = useRef(false);
 
+  // --- BACKEND SOCKET LOGIC ---
   useEffect(() => {
     if (activeTab === "sign") {
       connectSocket(async (data) => {
         const committed = data?.committed_letter;
-
         if (typeof committed === "string" && committed.length > 0) {
           if (!newWordStartedRef.current) {
             setFinalWord("");
             setTypedText("");
             newWordStartedRef.current = true;
           }
-
           setTypedText((prev) => (prev || "") + committed);
           return;
         }
-
         const q = data?.queue_text;
-        if (typeof q === "string" && q.length > 0) {
-          setTypedText(q);
-        }
-
+        if (typeof q === "string" && q.length > 0) { setTypedText(q); }
         if (data?.should_speak && Array.isArray(data?.letters_to_speak)) {
           const word = data.letters_to_speak.join("");
-
-          if (word.length > 0) {
-            setFinalWord(word);
-          }
-
+          if (word.length > 0) { setFinalWord(word); }
           setTypedText("");
           newWordStartedRef.current = false;
         }
@@ -66,10 +60,10 @@ export default function MainScreen() {
     } else {
       closeSocket();
     }
-
     return () => closeSocket();
   }, [activeTab]);
 
+  // --- SPEECH LOOP LOGIC ---
   useEffect(() => {
     if (activeTab === "speech") {
       shouldContinueSpeechRef.current = true;
@@ -79,156 +73,87 @@ export default function MainScreen() {
       stopRecordingAndSend(false, false);
       setIsRecording(false);
     }
-
     return () => {
       shouldContinueSpeechRef.current = false;
       stopRecordingAndSend(false, false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const startSpeechLoop = async () => {
-  try {
-    const { granted } = await Audio.requestPermissionsAsync();
-
-    if (!granted) {
-      setSttText("Microphone permission denied.");
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        setSttText("Microphone permission denied.");
+        setActiveTab("sign");
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      if (shouldContinueSpeechRef.current) { await startRecording(); }
+    } catch (e) {
+      console.log("startSpeechLoop error:", e);
       setActiveTab("sign");
-      return;
     }
-
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    });
-
-    if (shouldContinueSpeechRef.current) {
-      await startRecording();
-    }
-  } catch (e) {
-    console.log("startSpeechLoop error:", e);
-    setSttText("Mic permission error.");
-    setActiveTab("sign");
-  }
-};
+  };
 
   const startRecording = async () => {
     try {
-      if (!shouldContinueSpeechRef.current) return;
-      if (recordingRef.current) return;
-
-      setSttText((prev) =>
-        prev && prev !== "Say something..." && prev !== "Listening..."
-          ? prev
-          : "Listening..."
-      );
-
+      if (!shouldContinueSpeechRef.current || recordingRef.current) return;
+      setSttText((prev) => (prev && prev !== "Say something..." && prev !== "Listening...") ? prev : "Listening...");
       setIsRecording(true);
-
       speechStartedRef.current = false;
       silenceTimerRef.current = 0;
       speechDurationRef.current = 0;
-
       const rec = new Audio.Recording();
       recordingRef.current = rec;
-
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       rec.setProgressUpdateInterval(100);
-
-      const silenceDbThreshold = -35;
-      const silenceSecondsToStop = 1.0;
-      const minSpeechSeconds = 0.3;
-      const frameSec = 0.1;
-
       rec.setOnRecordingStatusUpdate((status) => {
         if (!status.isRecording) return;
-
         const db = (status as any).metering;
         if (typeof db !== "number") return;
-
-        if (db > silenceDbThreshold) {
+        if (db > -35) {
           speechStartedRef.current = true;
           silenceTimerRef.current = 0;
-          speechDurationRef.current += frameSec;
+          speechDurationRef.current += 0.1;
         } else if (speechStartedRef.current) {
-          silenceTimerRef.current += frameSec;
+          silenceTimerRef.current += 0.1;
         }
-
-        if (
-          speechStartedRef.current &&
-          speechDurationRef.current >= minSpeechSeconds &&
-          silenceTimerRef.current >= silenceSecondsToStop
-        ) {
+        if (speechStartedRef.current && speechDurationRef.current >= 0.3 && silenceTimerRef.current >= 1.0) {
           if (isStoppingRef.current || isUploadingRef.current) return;
           stopRecordingAndSend(true, true);
         }
       });
-
       await rec.startAsync();
     } catch (e) {
-      console.log("startRecording error:", e);
-      recordingRef.current = null;
       setIsRecording(false);
-      setSttText("Mic error.");
     }
   };
 
-  const stopRecordingAndSend = async (
-    restartAfter: boolean,
-    shouldTranscribe: boolean
-  ) => {
+  const stopRecordingAndSend = async (restartAfter: boolean, shouldTranscribe: boolean) => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
-
     const rec = recordingRef.current;
-    if (!rec) {
-      isStoppingRef.current = false;
-      return;
-    }
-
+    if (!rec) { isStoppingRef.current = false; return; }
     try {
       recordingRef.current = null;
       setIsRecording(false);
-
       await rec.stopAndUnloadAsync();
       const uri = rec.getURI();
-
-      if (!uri) {
-        setSttText((prev) => prev || "No audio captured.");
-        return;
-      }
-
-      if (!shouldTranscribe) return;
-
+      if (!uri || !shouldTranscribe) return;
       if (isUploadingRef.current) return;
       isUploadingRef.current = true;
-
-      setSttText((prev) =>
-        prev && prev !== "Say something..." ? prev : "Transcribing..."
-      );
-
+      setSttText((prev) => prev && prev !== "Say something..." ? prev : "Transcribing...");
       const text = await sendAudioForSTT(uri);
-
       setSttText((prev) => {
         const t = (text || "").trim();
         if (!t) return prev || "…";
-        if (
-          !prev ||
-          prev === "Say something..." ||
-          prev === "Listening..." ||
-          prev === "Transcribing..."
-        ) {
-          return t;
-        }
-        return t || "…";
+        return t;
       });
     } catch (e) {
-      console.log("stop/send error:", e);
-      setSttText((prev) => (prev ? prev : "STT error."));
+      setSttText("STT error.");
     } finally {
       isUploadingRef.current = false;
       isStoppingRef.current = false;
-
       if (restartAfter && activeTab === "speech" && shouldContinueSpeechRef.current) {
         await startRecording();
       }
@@ -236,263 +161,200 @@ export default function MainScreen() {
   };
 
   const handleSpeechToggle = async () => {
-    if (isRecording) {
-      // Manual stop -> transcribe immediately, but do not auto restart
-      await stopRecordingAndSend(false, true);
-    } else {
-      // Manual start
-      shouldContinueSpeechRef.current = true;
-      await startSpeechLoop();
-    }
+    if (isRecording) { await stopRecordingAndSend(false, true); } 
+    else { shouldContinueSpeechRef.current = true; await startSpeechLoop(); }
   };
 
-  const signBoxText =
-    typedText.length > 0
-      ? typedText
-      : finalWord.length > 0
-      ? finalWord
-      : "Waiting for sign...";
+  const signBoxText = typedText.length > 0 ? typedText : finalWord.length > 0 ? finalWord : "Waiting for sign...";
 
   return (
     <View style={styles.container}>
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === "sign" && styles.activeTab]}
-          onPress={() => setActiveTab("sign")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "sign" && styles.activeTabText,
-            ]}
+      <View style={styles.mainWrapper}> 
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "sign" && styles.activeTab]}
+            onPress={() => setActiveTab("sign")}
           >
-            Sign to Speech
-          </Text>
-        </TouchableOpacity>
+            <Text style={[styles.tabText, activeTab === "sign" && styles.activeTabText]}>Sign to Speech</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tab, activeTab === "speech" && styles.activeTab]}
-          onPress={() => setActiveTab("speech")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "speech" && styles.activeTabText,
-            ]}
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "speech" && styles.activeTab]}
+            onPress={() => setActiveTab("speech")}
           >
-            Speech to Text
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <Text style={[styles.tabText, activeTab === "speech" && styles.activeTabText]}>Speech to Text</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.content}>
-        {activeTab === "sign" ? (
-          <View style={styles.signLayout}>
-            <View style={styles.cameraPanel}>
-              <CameraComponent />
-            </View>
-
-            <View style={styles.translationPanel}>
-              <Text style={styles.translationLabel}>FSL TRANSLATION:</Text>
-              <Text style={styles.translationText}>{signBoxText}</Text>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.speechLayout}>
-            <View style={styles.speechTopPanel}>
-              <View style={styles.waveRow}>
-                <View style={styles.waveWrapper}>
-                  <AudioWave isRecording={isRecording} />
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.toggleButton,
-                    isRecording ? styles.stopButton : styles.startButton,
-                  ]}
-                  onPress={handleSpeechToggle}
-                >
-                  <Text style={styles.toggleButtonText}>
-                    {isRecording ? "Stop" : "Start"}
-                  </Text>
-                </TouchableOpacity>
+        <View style={styles.content}>
+          {activeTab === "sign" ? (
+            <View style={styles.signLayout}>
+              <View style={styles.cameraPanel}>
+                <CameraComponent />
+              </View>
+              {/* SCROLLABLE FSL PANEL */}
+              <View style={styles.translationPanel}>
+                <Text style={styles.translationLabel}>FSL TRANSLATION</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    <Text style={styles.translationText}>{signBoxText}</Text>
+                </ScrollView>
               </View>
             </View>
-
-            <View style={styles.speechBottomPanel}>
-              <Text style={styles.translationLabel}>SPEECH TO TEXT:</Text>
-              <Text style={styles.translationText}>{sttText}</Text>
+          ) : (
+            <View style={styles.speechLayout}>
+              <View style={styles.speechTopPanel}>
+                <View style={styles.waveRow}>
+                  <View style={styles.waveWrapper}>
+                    <AudioWave isRecording={isRecording} />
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.toggleButton, isRecording ? styles.stopButton : styles.startButton]}
+                    onPress={handleSpeechToggle}
+                  >
+                    <Text style={styles.toggleButtonText}>{isRecording ? "Stop" : "Start"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              {/* SCROLLABLE STT PANEL */}
+              <View style={styles.speechBottomPanel}>
+                <Text style={styles.translationLabel}>SPEECH TO TEXT</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    <Text style={styles.translationText}>{sttText}</Text>
+                </ScrollView>
+              </View>
             </View>
-          </View>
-        )}
+          )}
+        </View>
       </View>
     </View>
   );
 }
 
-const PRIMARY = "#8B4E1D";
-const BG = "#F7F5F3";
-const PANEL = "#EAE6E2";
-const TEXT = "#1D2A39";
-const MUTED = "#7C7A76";
-const TAB_BG = "#D9D4CF";
-const BORDER = "#D8D0C8";
-const GREEN = "#4CAF50";
-const RED = "#C85A54";
+const THEME = {
+  primary: "#8B4E1D",
+  background: "#F7F5F3",
+  panel: "#FFFFFF",
+  text: "#1D2A39",
+  muted: "#7C7A76",
+  border: "#E0DDD9",
+  success: "#4CAF50",
+  danger: "#C85A54",
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BG,
-    paddingHorizontal: 18,
+    backgroundColor: THEME.background,
+  },
+  mainWrapper: {
+    flex: 1,
+    paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 18,
+    paddingBottom: 20,
   },
-
-  brand: {
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: 7,
-    color: PRIMARY,
-    marginBottom: 10,
-  },
-
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: TAB_BG,
+    backgroundColor: "#E2E0DD",
     borderRadius: 34,
-    padding: 5,
-    marginBottom: 18,
+    padding: 4,
+    marginBottom: 12,
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
   },
-
   tab: {
     flex: 1,
-    height: 60,
-    borderRadius: 30,
+    height: 36,
+    borderRadius: 60,
     justifyContent: "center",
     alignItems: "center",
   },
+  activeTab: { backgroundColor: THEME.primary },
+  tabText: { fontSize: 11, fontWeight: "700", color: THEME.muted },
+  activeTabText: { color: "#FFFFFF" },
+  content: { flex: 1 },
 
-  activeTab: {
-    backgroundColor: PRIMARY,
-  },
-
-  tabText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: MUTED,
-  },
-
-  activeTabText: {
-    color: "#FFFFFF",
-  },
-
-  content: {
-    flex: 1,
-  },
-
+  // --- SIGN TO SPEECH ---
   signLayout: {
-    flex: 1,
+    flex: 1, 
     flexDirection: "row",
-    gap: 18,
-    alignItems: "stretch",
+    gap: 12,
   },
-
   cameraPanel: {
-    flex: 1.75,
+    flex: 1.6,
     backgroundColor: "#000",
-    borderRadius: 28,
+    borderRadius: 18,
     overflow: "hidden",
-    minHeight: 420,
+    borderWidth: 1,
+    borderColor: THEME.border,
   },
-
   translationPanel: {
     flex: 1,
-    backgroundColor: PANEL,
-    borderRadius: 28,
+    backgroundColor: THEME.border,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 26,
-    paddingVertical: 24,
-    justifyContent: "flex-start",
-    minHeight: 420,
+    borderColor: THEME.border,
+    maxHeight: '100%', // Keeps panel from growing
   },
 
+  // --- SPEECH TO TEXT ---
   speechLayout: {
-    flex: 0,
+    flex: 1,
+    gap: 12,
   },
-
   speechTopPanel: {
-    height: 160,
-    backgroundColor: PANEL,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: BORDER,
+    height: 60, // Slimmer header to fix "too big" issue
+    paddingHorizontal: 15,
     justifyContent: "center",
-    paddingHorizontal: 20,
   },
-
   waveRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 14,
   },
-
   waveWrapper: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    height: 30, // Fixed small height for wave centering
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
-
   toggleButton: {
-    minWidth: 92,
-    height: 46,
-    borderRadius: 23,
+    minWidth: 70,
+    height: 30,
+    borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 18,
   },
-
-  startButton: {
-    backgroundColor: GREEN,
-  },
-
-  stopButton: {
-    backgroundColor: RED,
-  },
-
+  startButton: { backgroundColor: THEME.success },
+  stopButton: { backgroundColor: THEME.danger },
   toggleButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "800",
   },
-
   speechBottomPanel: {
-    height: 340,
-    backgroundColor: PANEL,
-    borderRadius: 28,
+    flex: 1, // Fills remaining space
+    backgroundColor: THEME.border,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 28,
-    paddingVertical: 20,
-    justifyContent: "flex-start",
-    marginTop: 18,
+    borderColor: THEME.border,
+    padding: 24,
   },
-
   translationLabel: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: "800",
-    color: PRIMARY,
-    marginBottom: 16,
+    color: THEME.primary,
+    marginBottom: 6,
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
-
   translationText: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: TEXT,
-    lineHeight: 42,
+    fontSize: 16, // Readable size for the Pi display
+    fontWeight: "700",
+    color: THEME.text,
+    lineHeight: 30,
   },
 });
