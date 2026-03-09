@@ -3,6 +3,11 @@
 BASE_DIR="/home/sms/Echify-App"
 MODEL_PATH="$BASE_DIR/backend/model"
 
+echo "🔄 Updating project from GitHub..."
+cd "$BASE_DIR"
+git fetch origin
+git reset --hard origin/main
+
 echo "🔍 Checking project integrity..."
 
 if [ ! -d "$MODEL_PATH" ]; then
@@ -16,13 +21,33 @@ else
     echo "✅ Model folder found."
 fi
 
+
+# ---------------------------
+# Build Web UI
+# ---------------------------
+
+echo "🔨 Building Web UI..."
+
+cd "$BASE_DIR"
+
+npx expo export:web
+
+if [ $? -ne 0 ]; then
+    echo "❌ Web build failed"
+    exit 1
+fi
+
+echo "✅ Web UI built successfully"
+
+
 # ---------------------------
 # Start Backend
 # ---------------------------
 
-echo "🚀 Starting FastAPI Backend..."
+echo "🚀 Starting Backend..."
 
-cd "$BASE_DIR/backend" || exit 1
+cd "$BASE_DIR/backend"
+
 source venv/bin/activate
 
 uvicorn main:app --host 0.0.0.0 --port 8000 &
@@ -31,24 +56,12 @@ BACKEND_PID=$!
 sleep 4
 
 if ! kill -0 $BACKEND_PID 2>/dev/null; then
-    echo "❌ Backend failed to start."
+    echo "❌ Backend failed to start"
     exit 1
 fi
 
 echo "✅ Backend running"
 
-# ---------------------------
-# Start Expo Web
-# ---------------------------
-
-echo "🌐 Starting Expo Web UI..."
-
-cd "$BASE_DIR"
-
-npx expo start --web &
-EXPO_PID=$!
-
-sleep 8
 
 # ---------------------------
 # Start Camera Engine
@@ -56,21 +69,28 @@ sleep 8
 
 echo "📷 Starting Camera Engine..."
 
-cd "$BASE_DIR/hardware/camera" || exit 1
+cd "$BASE_DIR/hardware/camera"
 
 "$BASE_DIR/backend/venv/bin/python" camera_engine.py &
 CAMERA_PID=$!
+
+sleep 5
+
 
 # ---------------------------
 # Open Chromium
 # ---------------------------
 
-echo "🖥 Opening Chromium UI..."
+echo "🖥 Opening Chromium..."
 
-chromium-browser http://localhost:19006 --kiosk &
+chromium --app=http://localhost:3000 \
+--use-fake-ui-for-media-stream \
+--no-sandbox \
+--kiosk &
+
 
 # ---------------------------
-# Wait
+# Keep script alive
 # ---------------------------
 
 wait
