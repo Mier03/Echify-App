@@ -5,8 +5,8 @@ MODEL_PATH="$BASE_DIR/backend/model"
 
 echo "🔄 Updating project from GitHub..."
 cd "$BASE_DIR" || exit 1
-git fetch origin
-git reset --hard origin/main
+# git fetch origin
+# git reset --hard origin/main
 
 echo "🔍 Checking project integrity..."
 
@@ -20,6 +20,15 @@ if [ -z "$(ls -A "$MODEL_PATH")" ]; then
 else
     echo "✅ Model folder found."
 fi
+
+
+echo "Stopping old processes..."
+pkill -f "python3 -m http.server 3000" 2>/dev/null
+pkill -f "uvicorn main:app --host 0.0.0.0 --port 8000" 2>/dev/null
+pkill -f "camera_engine.py" 2>/dev/null
+pkill -f "chromium.*localhost:3000" 2>/dev/null
+
+sleep 2
 
 # ---------------------------
 # Build Web UI
@@ -45,10 +54,24 @@ echo "✅ Web UI built successfully"
 # ---------------------------
 echo "🌐 Starting Web Server..."
 cd "$BASE_DIR/dist" || exit 1
-python3 -m http.server 3000 &
-SERVER_PID=$!
+source venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8000 > "$BASE_DIR/backend.log" 2>&1 &
+BACKEND_PID=$!
 
-sleep 2
+sleep 5
+
+if ! kill -0 $BACKEND_PID 2>/dev/null; then
+    echo "Backend failed to start"
+    echo "Check: $BASE_DIR/backend.log"
+    kill $SERVER_PID 2>/dev/null
+    exit 1
+fi
+
+
+# python3 -m http.server 3000 &
+# SERVER_PID=$!
+
+# sleep 2
 
 # ---------------------------
 # Start Backend (Port 8000)
