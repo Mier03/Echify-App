@@ -187,25 +187,14 @@
 // });
 import React, { useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View, ActivityIndicator } from "react-native";
-import {
-  CameraView as ExpoCameraView,
-  useCameraPermissions,
-} from "expo-camera";
 import { sendFrame } from "../services/socket";
 
-interface CameraViewProps {
-  onPrediction?: (prediction: string) => void;
-}
-
-export default function CameraView({ onPrediction }: CameraViewProps) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<any>(null);
-
+export default function CameraView() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [isCapturing, setIsCapturing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [errorText, setErrorText] = useState("");
 
   useEffect(() => {
@@ -214,11 +203,19 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
 
     const initWebCamera = async () => {
       try {
+        if (
+          typeof navigator === "undefined" ||
+          !navigator.mediaDevices ||
+          !navigator.mediaDevices.getUserMedia
+        ) {
+          throw new Error("mediaDevices.getUserMedia is not available");
+        }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        console.log("MEDIA DEVICES:", devices);
+
         const media = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: 640,
-            height: 480,
-          },
+          video: true,
           audio: false,
         });
 
@@ -229,30 +226,12 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
           await videoRef.current.play();
         }
 
-        if (active) setIsInitialized(true);
-      } catch (err: any) {
-        console.error("Web camera error:", err);
         if (active) {
-          setErrorText(String(err?.message || err));
+          setErrorText("");
           setIsInitialized(true);
         }
-      }
-    };
-
-    const initNativeCamera = async () => {
-      try {
-        if (permission?.granted === true) {
-          if (active) setIsInitialized(true);
-          return;
-        }
-
-        if (permission?.canAskAgain !== false) {
-          await requestPermission();
-        }
-
-        if (active) setIsInitialized(true);
       } catch (err: any) {
-        console.error("Native camera error:", err);
+        console.error("Web camera error:", err);
         if (active) {
           setErrorText(String(err?.message || err));
           setIsInitialized(true);
@@ -263,7 +242,8 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
     if (Platform.OS === "web") {
       initWebCamera();
     } else {
-      initNativeCamera();
+      setErrorText("This component is intended for web on Raspberry Pi.");
+      setIsInitialized(true);
     }
 
     return () => {
@@ -272,16 +252,16 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [permission, requestPermission]);
+  }, []);
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || Platform.OS !== "web" || errorText) return;
 
-    let isActive = true;
+    let active = true;
     setIsCapturing(true);
 
-    const webLoop = async () => {
-      while (isActive) {
+    const loop = async () => {
+      while (active) {
         try {
           const video = videoRef.current;
           const canvas = canvasRef.current;
@@ -300,7 +280,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
             }
           }
         } catch (err: any) {
-          console.log("Web frame capture error:", err);
+          console.log("Frame capture error:", err);
           setErrorText(String(err?.message || err));
         }
 
@@ -308,47 +288,13 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       }
     };
 
-    const nativeLoop = async () => {
-      if (!permission?.granted) return;
-
-      await new Promise((r) => setTimeout(r, 1000));
-
-      while (isActive) {
-        try {
-          if (!cameraRef.current) {
-            await new Promise((r) => setTimeout(r, 300));
-            continue;
-          }
-
-          const photo = await cameraRef.current.takePictureAsync({
-            base64: true,
-            quality: 0.7,
-            skipProcessing: true,
-          });
-
-          if (photo?.base64) {
-            sendFrame(photo.base64);
-          }
-        } catch (err: any) {
-          console.log("Native frame capture error:", err);
-          setErrorText(String(err?.message || err));
-        }
-
-        await new Promise((r) => setTimeout(r, 500));
-      }
-    };
-
-    if (Platform.OS === "web") {
-      webLoop();
-    } else if (permission?.granted) {
-      nativeLoop();
-    }
+    loop();
 
     return () => {
-      isActive = false;
+      active = false;
       setIsCapturing(false);
     };
-  }, [isInitialized, permission?.granted]);
+  }, [isInitialized, errorText]);
 
   if (!isInitialized) {
     return (
@@ -359,37 +305,25 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
     );
   }
 
-  if (Platform.OS !== "web" && !permission?.granted) {
+  if (errorText) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Camera unavailable</Text>
-        <Text style={styles.loadingSubtext}>Allow camera access.</Text>
-        {!!errorText && <Text style={styles.errorText}>{errorText}</Text>}
+        <Text style={styles.errorText}>{errorText}</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {Platform.OS === "web" ? (
-        <>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            style={styles.webVideo as any}
-          />
-          <canvas ref={canvasRef} style={{ display: "none" }} />
-        </>
-      ) : (
-        <ExpoCameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing="front"
-          mute={true}
-        />
-      )}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        style={styles.webVideo as any}
+      />
+      <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <View style={styles.statusIndicator}>
         <View style={[styles.statusDot, isCapturing && styles.statusDotActive]} />
@@ -397,12 +331,6 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
           {isCapturing ? "Capturing..." : "Idle"}
         </Text>
       </View>
-
-      {!!errorText && (
-        <View style={styles.errorOverlay}>
-          <Text style={styles.errorOverlayText}>{errorText}</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -412,9 +340,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
     position: "relative",
-  },
-  camera: {
-    flex: 1,
   },
   webVideo: {
     width: "100%",
@@ -436,15 +361,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
-  loadingSubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-  },
   errorText: {
     marginTop: 10,
-    fontSize: 12,
+    fontSize: 14,
     color: "red",
     textAlign: "center",
   },
@@ -473,19 +392,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "600",
-  },
-  errorOverlay: {
-    position: "absolute",
-    left: 10,
-    right: 10,
-    bottom: 10,
-    backgroundColor: "rgba(255,0,0,0.75)",
-    padding: 8,
-    borderRadius: 8,
-  },
-  errorOverlayText: {
-    color: "#fff",
-    fontSize: 12,
-    textAlign: "center",
   },
 });
