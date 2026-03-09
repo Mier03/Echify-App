@@ -5,8 +5,8 @@ MODEL_PATH="$BASE_DIR/backend/models"
 
 echo "🔄 Updating project from GitHub..."
 cd "$BASE_DIR" || exit 1
-# git fetch origin
-# git reset --hard origin/main
+git fetch origin
+git reset --hard origin/main
 
 echo "🔍 Checking project integrity..."
 
