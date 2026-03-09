@@ -30,7 +30,7 @@ echo "🔨 Building Web UI..."
 
 cd "$BASE_DIR"
 
-npx expo export:web
+npx expo export -p web
 
 if [ $? -ne 0 ]; then
     echo "❌ Web build failed"
