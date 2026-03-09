@@ -1,13 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ActivityIndicator,
-  TouchableOpacity,
-  Linking,
-  Platform,
-} from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
 import {
   CameraView as ExpoCameraView,
   useCameraPermissions,
@@ -25,33 +17,23 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // -----------------------
-  // Camera permission
-  // -----------------------
   useEffect(() => {
     let isMounted = true;
 
     const initializeCamera = async () => {
-      if (isInitialized) return;
-
       try {
         if (permission?.granted === true) {
           if (isMounted) setIsInitialized(true);
           return;
         }
 
-        // If browser/app already denied and cannot ask again
-        if (permission?.granted === false && permission?.canAskAgain === false) {
-          if (isMounted) setIsInitialized(true);
-          return;
+        if (permission?.canAskAgain !== false) {
+          await requestPermission();
         }
-
-        const result = await requestPermission();
-        console.log("📷 Permission result:", result);
 
         if (isMounted) setIsInitialized(true);
       } catch (error) {
-        console.error("❌ Error requesting camera permission:", error);
+        console.error("Camera permission error:", error);
         if (isMounted) setIsInitialized(true);
       }
     };
@@ -64,26 +46,17 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [permission, requestPermission, isInitialized]);
+  }, [permission, requestPermission]);
 
-  // -----------------------
-  // Capture loop
-  // -----------------------
   useEffect(() => {
     if (!isInitialized || !permission?.granted) {
-      console.log("⏸️ Skipping capture:", {
-        isInitialized,
-        hasPermission: permission?.granted,
-      });
       return;
     }
 
     let isActive = true;
     setIsCapturing(true);
-    console.log("▶️ Starting capture loop");
 
     const captureLoop = async () => {
-      // let preview settle first
       await new Promise((r) => setTimeout(r, 1000));
 
       while (isActive) {
@@ -103,10 +76,9 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
             sendFrame(photo.base64);
           }
         } catch (err) {
-          console.log("📸 Frame capture error:", err);
+          console.log("Frame capture error:", err);
         }
 
-        // ~2 FPS
         await new Promise((r) => setTimeout(r, 500));
       }
     };
@@ -114,39 +86,16 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
     captureLoop();
 
     return () => {
-      console.log("⏹️ Stopping capture loop");
       isActive = false;
       setIsCapturing(false);
     };
   }, [isInitialized, permission?.granted]);
 
-  // -----------------------
-  // Actions
-  // -----------------------
-  const openSettings = () => {
-    Linking.openSettings();
-  };
-
-  const retryPermission = async () => {
-    try {
-      const result = await requestPermission();
-      console.log("🔄 Retry permission result:", result);
-    } catch (error) {
-      console.error("❌ Retry permission error:", error);
-    }
-  };
-
-  // -----------------------
-  // RENDER
-  // -----------------------
   if (!isInitialized) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4CAF50" />
         <Text style={styles.loadingText}>Initializing camera...</Text>
-        <Text style={styles.loadingSubtext}>
-          {permission?.granted ? "Loading..." : "Checking permissions..."}
-        </Text>
       </View>
     );
   }
@@ -154,42 +103,10 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   if (!permission?.granted) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorIcon}>📷</Text>
-        <Text style={styles.errorTitle}>Camera Access Required</Text>
-        <Text style={styles.errorText}>
-          This app needs camera permission to recognize sign language gestures.
+        <Text style={styles.loadingText}>Camera unavailable</Text>
+        <Text style={styles.loadingSubtext}>
+          Allow camera access once in Chromium.
         </Text>
-
-        <Text style={styles.errorSubtext}>
-          {Platform.OS === "web"
-            ? "Please allow camera access in your browser."
-            : "Please grant camera permission in your device settings."}
-        </Text>
-
-        {permission?.canAskAgain === false && Platform.OS !== "web" ? (
-          <TouchableOpacity style={styles.settingsButton} onPress={openSettings}>
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        <TouchableOpacity
-          style={
-            permission?.canAskAgain === false && Platform.OS !== "web"
-              ? styles.retryButton
-              : styles.settingsButton
-          }
-          onPress={retryPermission}
-        >
-          <Text
-            style={
-              permission?.canAskAgain === false && Platform.OS !== "web"
-                ? styles.retryButtonText
-                : styles.settingsButtonText
-            }
-          >
-            Try Again
-          </Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -233,61 +150,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#333",
     fontWeight: "600",
+    textAlign: "center",
   },
   loadingSubtext: {
     marginTop: 8,
     fontSize: 14,
     color: "#666",
-  },
-  errorIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 12,
     textAlign: "center",
-  },
-  errorText: {
-    fontSize: 15,
-    color: "#666",
-    textAlign: "center",
-    marginTop: 8,
-    paddingHorizontal: 20,
-    lineHeight: 22,
-  },
-  errorSubtext: {
-    fontSize: 13,
-    color: "#999",
-    textAlign: "center",
-    marginTop: 8,
-    paddingHorizontal: 20,
-    lineHeight: 20,
-    fontStyle: "italic",
-  },
-  settingsButton: {
-    marginTop: 24,
-    backgroundColor: "#4CAF50",
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 8,
-  },
-  settingsButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  retryButton: {
-    marginTop: 12,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-  },
-  retryButtonText: {
-    color: "#4CAF50",
-    fontSize: 16,
-    fontWeight: "600",
   },
   statusIndicator: {
     position: "absolute",
