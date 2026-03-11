@@ -263,6 +263,9 @@ export default function MainScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.mainWrapper}>
+        <View style={styles.header}>
+          <Text style={styles.brandText}>E C H I F Y</Text>
+        </View>
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === "sign" && styles.activeTab]}
@@ -367,20 +370,34 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
 
+  header: {
+    position: 'absolute',
+    left: 0,         
+    top: 18,          
+    zIndex: 10,
+    paddingHorizontal: 20,
+  },
+  brandText: {
+    fontSize: 18,     
+    fontWeight: "800",
+    color: THEME.primary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
   tabContainer: {
     flexDirection: "row",
     backgroundColor: "#E2E0DD",
     borderRadius: 34,
     padding: 4,
     marginBottom: 12,
-    width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
+    width: '60%',    
+    maxWidth: 300,
+    alignSelf: 'flex-end', // Keep tabs on the right
   },
 
   tab: {
     flex: 1,
-    height: 36,
+    height: 30,
     borderRadius: 60,
     justifyContent: "center",
     alignItems: "center",
@@ -420,7 +437,7 @@ const styles = StyleSheet.create({
   },
 
   translationPanel: {
-    flex: 1,
+    flex: 0.7,
     backgroundColor: THEME.border,
     borderRadius: 18,
     padding: 18,
