@@ -20,6 +20,10 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   const [cameraError, setCameraError] = useState("");
 
   useEffect(() => {
+    console.log("Camera permission object:", permission);
+  }, [permission]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const initializeCamera = async () => {
@@ -30,7 +34,8 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
         }
 
         if (permission?.canAskAgain !== false) {
-          await requestPermission();
+          const result = await requestPermission();
+          console.log("requestPermission result:", result);
         }
 
         if (isMounted) setIsInitialized(true);
@@ -57,25 +62,48 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
     const inspectDevices = async () => {
       try {
         if (
+          permission?.granted &&
           typeof navigator !== "undefined" &&
           navigator.mediaDevices &&
           navigator.mediaDevices.enumerateDevices
         ) {
           const devices = await navigator.mediaDevices.enumerateDevices();
           const videoInputs = devices.filter((d) => d.kind === "videoinput");
-          console.log("Video inputs:", videoInputs);
+          console.log("Video inputs after permission:", videoInputs);
 
           if (videoInputs.length === 0) {
             setCameraError("No browser camera detected");
+          } else {
+            setCameraError("");
           }
         }
       } catch (err) {
         console.log("enumerateDevices error:", err);
+        setCameraError("Device check failed");
       }
     };
 
     inspectDevices();
-  }, []);
+  }, [permission?.granted]);
+
+  useEffect(() => {
+    const testCamera = async () => {
+      if (!permission?.granted) return;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        console.log("getUserMedia success:", stream);
+      } catch (err) {
+        console.error("getUserMedia failed:", err);
+        setCameraError("getUserMedia failed");
+      }
+    };
+
+    testCamera();
+  }, [permission?.granted]);
 
   useEffect(() => {
     if (!isInitialized || !permission?.granted || !isCameraReady) {
@@ -134,9 +162,9 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   if (!permission?.granted) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Camera unavailable</Text>
+        <Text style={styles.loadingText}>Camera permission not granted</Text>
         <Text style={styles.loadingSubtext}>
-          Allow camera access in Chromium.
+          Check Chromium site settings and reload the page.
         </Text>
       </View>
     );
