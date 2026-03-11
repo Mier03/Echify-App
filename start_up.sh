@@ -77,6 +77,25 @@ fi
 
 echo "✅ Web server running on http://localhost:3000"
 
+echo "📷 Starting Camera Engine..."
+cd "$BASE_DIR/hardware/camera" || exit 1
+"$BASE_DIR/venv/bin/python" camera_engine.py > "$BASE_DIR/camera.log" 2>&1 &
+CAMERA_PID=$!
+
+sleep 12
+
+if ! kill -0 $CAMERA_PID 2>/dev/null; then
+    echo "❌ Camera engine failed to start"
+    echo "Check: $BASE_DIR/camera.log"
+    kill $SERVER_PID 2>/dev/null
+    exit 1
+fi
+
+echo "✅ Camera engine running"
+
+echo "⏳ Waiting for virtual webcam to stabilize..."
+sleep 5
+
 echo "🚀 Starting Backend..."
 cd "$BASE_DIR/backend" || exit 1
 source "$BASE_DIR/venv/bin/activate"
@@ -88,32 +107,11 @@ sleep 5
 if ! kill -0 $BACKEND_PID 2>/dev/null; then
     echo "❌ Backend failed to start"
     echo "Check: $BASE_DIR/backend.log"
-    kill $SERVER_PID 2>/dev/null
+    kill $CAMERA_PID $SERVER_PID 2>/dev/null
     exit 1
 fi
 
 echo "✅ Backend running on http://localhost:8000"
-
-echo "📷 Starting Camera Engine..."
-cd "$BASE_DIR/hardware/camera" || exit 1
-"$BASE_DIR/venv/bin/python" camera_engine.py > "$BASE_DIR/camera.log" 2>&1 &
-CAMERA_PID=$!
-
-sleep 12
-
-echo "Opening Chromium..."
-
-if ! kill -0 $CAMERA_PID 2>/dev/null; then
-    echo "❌ Camera engine failed to start"
-    echo "Check: $BASE_DIR/camera.log"
-    kill $BACKEND_PID $SERVER_PID 2>/dev/null
-    exit 1
-fi
-
-echo "✅ Camera engine running"
-
-echo "⏳ Waiting for virtual webcam to stabilize..."
-sleep 5
 
 echo "🖥 Opening Chromium..."
 chromium \

@@ -1,47 +1,60 @@
-#routes/preview.py
 import cv2
+import threading
 import time
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
-
-router = APIRouter()
-
-CAMERA_DEVICE = "/dev/video10"
 
 
-def generate_frames():
-    cap = cv2.VideoCapture(CAMERA_DEVICE)
+class SharedCamera:
+    def __init__(self, device="/dev/video10"):
+        self.device = device
+        self.cap = None
+        self.frame = None
+        self.lock = threading.Lock()
+        self.running = False
+        self.thread = None
 
-    if not cap.isOpened():
-        raise RuntimeError(f"Could not open camera device: {CAMERA_DEVICE}")
+    def start(self):
+        if self.running:
+            return
 
-    try:
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                time.sleep(0.03)
-                continue
+        retries = 10
+        for attempt in range(retries):
+            self.cap = cv2.VideoCapture(self.device)
+            if self.cap.isOpened():
+                break
 
-            ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            if not ok:
-                time.sleep(0.03)
-                continue
+            print(f"⚠️ Camera open failed on {self.device}, retry {attempt + 1}/{retries}")
+            time.sleep(1)
 
-            jpg = buffer.tobytes()
+        if self.cap is None or not self.cap.isOpened():
+            raise RuntimeError(f"Could not open camera device: {self.device}")
 
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
-            )
+        self.running = True
+        self.thread = threading.Thread(target=self._reader_loop, daemon=True)
+        self.thread.start()
+        print(f"✅ Shared camera started on {self.device}")
 
-            time.sleep(0.03)
-    finally:
-        cap.release()
+    def _reader_loop(self):
+        while self.running:
+            ok, frame = self.cap.read()
+            if ok:
+                with self.lock:
+                    self.frame = frame
+            else:
+                time.sleep(0.02)
+
+    def get_frame(self):
+        with self.lock:
+            if self.frame is None:
+                return None
+            return self.frame.copy()
+
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=1)
+        if self.cap:
+            self.cap.release()
+        print("🛑 Shared camera stopped")
 
 
-@router.get("/preview")
-def preview_stream():
-    return StreamingResponse(
-        generate_frames(),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-    )
+shared_camera = SharedCamera("/dev/video10")
