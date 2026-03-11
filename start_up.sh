@@ -99,7 +99,9 @@ cd "$BASE_DIR/hardware/camera" || exit 1
 "$BASE_DIR/venv/bin/python" camera_engine.py > "$BASE_DIR/camera.log" 2>&1 &
 CAMERA_PID=$!
 
-sleep 8
+sleep 12
+
+echo "Opening Chromium..."
 
 if ! kill -0 $CAMERA_PID 2>/dev/null; then
     echo "❌ Camera engine failed to start"
