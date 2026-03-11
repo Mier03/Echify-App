@@ -23,6 +23,7 @@ else
 fi
 
 echo "🛑 Stopping old processes..."
+pkill -f "emergency_button.py" 2>/dev/null
 pkill -f "python3 -m http.server 3000" 2>/dev/null
 pkill -f "uvicorn src.main:app --host 0.0.0.0 --port 8000" 2>/dev/null
 pkill -f "camera_engine.py" 2>/dev/null
@@ -113,6 +114,12 @@ fi
 
 echo "✅ Backend running on http://localhost:8000"
 
+echo "🔘 Starting Physical Button Listener..."
+cd "$BASE_DIR/hardware/button" || exit 1
+"$BASE_DIR/venv/bin/python" emergency_button.py > "$BASE_DIR/button.log" 2>&1 &
+BUTTON_PID=$!
+
+
 echo "🖥 Opening Chromium..."
 chromium \
   --user-data-dir="$CHROME_PROFILE" \
@@ -129,7 +136,7 @@ echo "✅ All systems active. Press Ctrl+C to stop all processes."
 
 cleanup() {
     echo "🛑 Stopping all processes..."
-    kill $CHROMIUM_PID $CAMERA_PID $BACKEND_PID $SERVER_PID 2>/dev/null
+    kill $CHROMIUM_PID $CAMERA_PID $BACKEND_PID $SERVER_PID $BUTTON_PID 2>/dev/null
     pkill -x chromium 2>/dev/null
     exit
 }
