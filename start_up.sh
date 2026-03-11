@@ -2,7 +2,7 @@
 
 BASE_DIR="/home/sms/Echify-App"
 MODEL_PATH="$BASE_DIR/backend/models"
-CHROME_PROFILE="/tmp/echify-chrome"
+CHROME_PROFILE="/home/sms/.echify-profile"
 
 echo "🔄 Updating project from GitHub..."
 cd "$BASE_DIR" || exit 1
@@ -32,7 +32,7 @@ pkill -f "$CHROME_PROFILE" 2>/dev/null
 sleep 3
 
 echo "🧹 Cleaning old Chromium profile..."
-rm -rf "$CHROME_PROFILE"
+# rm -rf "$CHROME_PROFILE"
 
 echo "🎥 Preparing virtual webcam..."
 sudo modprobe -r v4l2loopback 2>/dev/null
