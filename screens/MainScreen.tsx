@@ -35,7 +35,9 @@ export default function MainScreen() {
 
   useEffect(() => {
     if (activeTab === "sign") {
-      connectSocket(async (data) => {
+      connectSocket((data) => {
+        console.log("📩 WS message:", data);
+
         const committed = data?.committed_letter;
 
         if (typeof committed === "string" && committed.length > 0) {
@@ -137,7 +139,9 @@ export default function MainScreen() {
       const rec = new Audio.Recording();
       recordingRef.current = rec;
 
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.prepareToRecordAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
       rec.setProgressUpdateInterval(100);
 
       const silenceDbThreshold = -35;
@@ -266,6 +270,7 @@ export default function MainScreen() {
         <View style={styles.header}>
           <Text style={styles.brandText}>E C H I F Y</Text>
         </View>
+
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === "sign" && styles.activeTab]}
@@ -371,28 +376,30 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    position: 'absolute',
-    left: 0,         
-    top: 18,          
+    position: "absolute",
+    left: 0,
+    top: 18,
     zIndex: 10,
     paddingHorizontal: 20,
   },
+
   brandText: {
-    fontSize: 18,     
+    fontSize: 18,
     fontWeight: "800",
     color: THEME.primary,
     letterSpacing: 1,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
+
   tabContainer: {
     flexDirection: "row",
     backgroundColor: "#E2E0DD",
     borderRadius: 34,
     padding: 4,
     marginBottom: 12,
-    width: '60%',    
+    width: "60%",
     maxWidth: 300,
-    alignSelf: 'flex-end', // Keep tabs on the right
+    alignSelf: "flex-end",
   },
 
   tab: {
