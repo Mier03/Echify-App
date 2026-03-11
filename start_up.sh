@@ -36,7 +36,7 @@ rm -rf "$CHROME_PROFILE"
 
 echo "🎥 Preparing virtual webcam..."
 sudo modprobe -r v4l2loopback 2>/dev/null
-sudo modprobe v4l2loopback video_nr=10 card_label='Echify-Camera' exclusive_caps=1
+sudo modprobe v4l2loopback video_nr=10 card_label='Echify-Camera' exclusive_caps=0 devices=1
 sudo chmod 777 /dev/video10
 sleep 2
 
