@@ -59,53 +59,6 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   }, [permission, requestPermission]);
 
   useEffect(() => {
-    const inspectDevices = async () => {
-      try {
-        if (
-          permission?.granted &&
-          typeof navigator !== "undefined" &&
-          navigator.mediaDevices &&
-          navigator.mediaDevices.enumerateDevices
-        ) {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoInputs = devices.filter((d) => d.kind === "videoinput");
-          console.log("Video inputs after permission:", videoInputs);
-
-          if (videoInputs.length === 0) {
-            setCameraError("No browser camera detected");
-          } else {
-            setCameraError("");
-          }
-        }
-      } catch (err) {
-        console.log("enumerateDevices error:", err);
-        setCameraError("Device check failed");
-      }
-    };
-
-    inspectDevices();
-  }, [permission?.granted]);
-
-  useEffect(() => {
-    const testCamera = async () => {
-      if (!permission?.granted) return;
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        console.log("getUserMedia success:", stream);
-      } catch (err) {
-        console.error("getUserMedia failed:", err);
-        setCameraError("getUserMedia failed");
-      }
-    };
-
-    testCamera();
-  }, [permission?.granted]);
-
-  useEffect(() => {
     if (!isInitialized || !permission?.granted || !isCameraReady) {
       return;
     }

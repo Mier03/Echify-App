@@ -45,7 +45,7 @@ def start_gstreamer():
         "!",
         "videoconvert",
         "!",
-        "video/x-raw,format=YUY2",
+        "video/x-raw,format=I420",
         "!",
         "v4l2sink",
         "device=/dev/video10",

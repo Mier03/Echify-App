@@ -118,19 +118,11 @@ sleep 5
 echo "🖥 Opening Chromium..."
 chromium \
   --user-data-dir="$CHROME_PROFILE" \
-  --disable-application-cache \
-  --disable-cache \
-  --disable-service-worker \
-  --disk-cache-size=1 \
   --app=http://localhost:3000 \
   --use-fake-ui-for-media-stream \
+  --unsafely-treat-insecure-origin-as-secure=http://localhost:3000 \
   --no-sandbox \
   --test-type \
-  --disable-gpu \
-  --disable-gpu-compositing \
-  --disable-accelerated-video-decode \
-  --disable-accelerated-2d-canvas \
-  --disable-features=UseSkiaRenderer,VaapiVideoDecoder \
   --kiosk &
 
 CHROMIUM_PID=$!
