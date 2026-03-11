@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
 import {
   CameraView as ExpoCameraView,
@@ -17,11 +17,14 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [previewLoaded, setPreviewLoaded] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
-  useEffect(() => {
-    console.log("Camera permission object:", permission);
-  }, [permission]);
+  const previewUrl = useMemo(() => {
+    const host =
+      typeof window !== "undefined" ? window.location.hostname : "localhost";
+    return `http://${host}:8000/preview`;
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,7 +72,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     const captureLoop = async () => {
-      await delay(800);
+      await delay(1000);
 
       while (isActive) {
         try {
@@ -117,7 +120,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Camera permission not granted</Text>
         <Text style={styles.loadingSubtext}>
-          Check Chromium site settings and reload the page.
+          Chromium still needs camera permission for hidden frame capture.
         </Text>
       </View>
     );
@@ -125,27 +128,54 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
 
   return (
     <View style={styles.container}>
-      <ExpoCameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="back"
-        mute={true}
-        onCameraReady={() => {
-          console.log("Camera ready");
+      {!previewLoaded && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+          <Text style={styles.loadingText}>Loading preview...</Text>
+        </View>
+      )}
+
+      <img
+        src={previewUrl}
+        alt="Camera Preview"
+        style={styles.previewImage as any}
+        onLoad={() => {
+          setPreviewLoaded(true);
           setCameraError("");
-          setIsCameraReady(true);
+        }}
+        onError={() => {
+          setPreviewLoaded(false);
+          setCameraError("Preview unavailable");
         }}
       />
 
+      <View style={styles.hiddenCameraWrapper}>
+        <ExpoCameraView
+          ref={cameraRef}
+          style={styles.hiddenCamera}
+          facing="back"
+          mute={true}
+          onCameraReady={() => {
+            console.log("Hidden camera ready");
+            setIsCameraReady(true);
+          }}
+        />
+      </View>
+
       <View style={styles.statusIndicator}>
-        <View style={[styles.statusDot, isCapturing && styles.statusDotActive]} />
+        <View
+          style={[
+            styles.statusDot,
+            isCapturing && previewLoaded && styles.statusDotActive,
+          ]}
+        />
         <Text style={styles.statusText}>
           {cameraError
             ? cameraError
             : isCapturing
-            ? "Capturing..."
-            : isCameraReady
-            ? "Ready"
+            ? "Live + Capturing"
+            : previewLoaded
+            ? "Preview Ready"
             : "Idle"}
         </Text>
       </View>
@@ -153,13 +183,38 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles: any = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+    position: "relative",
   },
-  camera: {
-    flex: 1,
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  hiddenCameraWrapper: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    left: -9999,
+    top: -9999,
+    overflow: "hidden",
+    opacity: 0,
+  },
+  hiddenCamera: {
+    width: 1,
+    height: 1,
+  },
+  loadingOverlay: {
+    position: "absolute",
+    inset: 0,
+    zIndex: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#111",
   },
   loadingContainer: {
     flex: 1,
@@ -191,6 +246,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    zIndex: 3,
   },
   statusDot: {
     width: 8,

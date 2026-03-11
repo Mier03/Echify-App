@@ -1,18 +1,22 @@
-// services/socket.ts
 let socket: WebSocket | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// ✅ now callback receives the full backend object
 let messageCallback: ((data: any) => void) | null = null;
 
-const WS_URL = "ws://10.99.147.64:8000/ws/fsl-simple";
+const getWsUrl = () => {
+  const host =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
+  return `ws://${host}:8000/ws/fsl-simple`;
+};
 
 export const connectSocket = (onMessage: (data: any) => void) => {
   messageCallback = onMessage;
 
   if (socket && socket.readyState === WebSocket.OPEN) return;
 
+  const WS_URL = getWsUrl();
   console.log("🌐 Connecting to WebSocket:", WS_URL);
+
   socket = new WebSocket(WS_URL);
 
   socket.onopen = () => {
@@ -28,7 +32,6 @@ export const connectSocket = (onMessage: (data: any) => void) => {
       const data = JSON.parse(e.data);
       if (messageCallback) messageCallback(data);
     } catch {
-      // fallback if server ever sends raw text
       if (messageCallback) messageCallback({ prediction: String(e.data) });
     }
   };
