@@ -16,6 +16,8 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
 
   const [isCapturing, setIsCapturing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -34,7 +36,10 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
         if (isMounted) setIsInitialized(true);
       } catch (error) {
         console.error("Camera permission error:", error);
-        if (isMounted) setIsInitialized(true);
+        if (isMounted) {
+          setCameraError("Camera permission error");
+          setIsInitialized(true);
+        }
       }
     };
 
@@ -49,27 +54,53 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   }, [permission, requestPermission]);
 
   useEffect(() => {
-    if (!isInitialized || !permission?.granted) {
+    const inspectDevices = async () => {
+      try {
+        if (
+          typeof navigator !== "undefined" &&
+          navigator.mediaDevices &&
+          navigator.mediaDevices.enumerateDevices
+        ) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter((d) => d.kind === "videoinput");
+          console.log("Video inputs:", videoInputs);
+
+          if (videoInputs.length === 0) {
+            setCameraError("No browser camera detected");
+          }
+        }
+      } catch (err) {
+        console.log("enumerateDevices error:", err);
+      }
+    };
+
+    inspectDevices();
+  }, []);
+
+  useEffect(() => {
+    if (!isInitialized || !permission?.granted || !isCameraReady) {
       return;
     }
 
     let isActive = true;
     setIsCapturing(true);
 
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
     const captureLoop = async () => {
-      await new Promise((r) => setTimeout(r, 1000));
+      await delay(800);
 
       while (isActive) {
         try {
           if (!cameraRef.current) {
-            await new Promise((r) => setTimeout(r, 300));
+            await delay(300);
             continue;
           }
 
           const photo = await cameraRef.current.takePictureAsync({
             base64: true,
-            quality: 0.7,
-            skipProcessing: true,
+            quality: 0.5,
+            skipProcessing: false,
           });
 
           if (photo?.base64) {
@@ -79,7 +110,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
           console.log("Frame capture error:", err);
         }
 
-        await new Promise((r) => setTimeout(r, 500));
+        await delay(700);
       }
     };
 
@@ -89,7 +120,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       isActive = false;
       setIsCapturing(false);
     };
-  }, [isInitialized, permission?.granted]);
+  }, [isInitialized, permission?.granted, isCameraReady]);
 
   if (!isInitialized) {
     return (
@@ -105,7 +136,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Camera unavailable</Text>
         <Text style={styles.loadingSubtext}>
-          Allow camera access once in Chromium.
+          Allow camera access in Chromium.
         </Text>
       </View>
     );
@@ -116,14 +147,25 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       <ExpoCameraView
         ref={cameraRef}
         style={styles.camera}
-        facing="front"
+        facing="back"
         mute={true}
+        onCameraReady={() => {
+          console.log("Camera ready");
+          setCameraError("");
+          setIsCameraReady(true);
+        }}
       />
 
       <View style={styles.statusIndicator}>
         <View style={[styles.statusDot, isCapturing && styles.statusDotActive]} />
         <Text style={styles.statusText}>
-          {isCapturing ? "Capturing..." : "Idle"}
+          {cameraError
+            ? cameraError
+            : isCapturing
+            ? "Capturing..."
+            : isCameraReady
+            ? "Ready"
+            : "Idle"}
         </Text>
       </View>
     </View>
