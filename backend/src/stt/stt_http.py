@@ -1,4 +1,3 @@
-#stt_http.py
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 import tempfile
