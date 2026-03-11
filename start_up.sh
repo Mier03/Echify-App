@@ -2,6 +2,7 @@
 
 BASE_DIR="/home/sms/Echify-App"
 MODEL_PATH="$BASE_DIR/backend/models"
+CHROME_PROFILE="/tmp/echify-chrome"
 
 echo "🔄 Updating project from GitHub..."
 cd "$BASE_DIR" || exit 1
@@ -23,16 +24,21 @@ fi
 
 echo "🛑 Stopping old processes..."
 pkill -f "python3 -m http.server 3000" 2>/dev/null
-pkill -f "uvicorn main:app --host 0.0.0.0 --port 8000" 2>/dev/null
+pkill -f "uvicorn src.main:app --host 0.0.0.0 --port 8000" 2>/dev/null
 pkill -f "camera_engine.py" 2>/dev/null
-pkill -f "chromium.*localhost:3000" 2>/dev/null
+pkill -x chromium 2>/dev/null
+pkill -f "$CHROME_PROFILE" 2>/dev/null
 
-sleep 2
+sleep 3
+
+echo "🧹 Cleaning old Chromium profile..."
+rm -rf "$CHROME_PROFILE"
 
 # ---------------------------
 # Build Web UI
 # ---------------------------
 echo "🔨 Building Web UI..."
+cd "$BASE_DIR" || exit 1
 rm -rf "$BASE_DIR/dist"
 npx expo export -p web --clear
 
@@ -64,7 +70,7 @@ if ! kill -0 $SERVER_PID 2>/dev/null; then
     exit 1
 fi
 
-echo "✅ Web server running"
+echo "✅ Web server running on http://localhost:3000"
 
 # ---------------------------
 # Start Backend (Port 8000)
@@ -84,7 +90,7 @@ if ! kill -0 $BACKEND_PID 2>/dev/null; then
     exit 1
 fi
 
-echo "✅ Backend running"
+echo "✅ Backend running on http://localhost:8000"
 
 # ---------------------------
 # Start Camera Engine
@@ -94,7 +100,7 @@ cd "$BASE_DIR/hardware/camera" || exit 1
 "$BASE_DIR/venv/bin/python" camera_engine.py > "$BASE_DIR/camera.log" 2>&1 &
 CAMERA_PID=$!
 
-sleep 6
+sleep 8
 
 if ! kill -0 $CAMERA_PID 2>/dev/null; then
     echo "❌ Camera engine failed to start"
@@ -105,14 +111,24 @@ fi
 
 echo "✅ Camera engine running"
 
+echo "⏳ Waiting for virtual webcam to stabilize..."
+sleep 5
+
+# Optional device check
+if [ -e /dev/video10 ]; then
+    echo "✅ Virtual webcam found at /dev/video10"
+else
+    echo "❌ /dev/video10 not found"
+    kill $CAMERA_PID $BACKEND_PID $SERVER_PID 2>/dev/null
+    exit 1
+fi
+
 # ---------------------------
 # Open Chromium
 # ---------------------------
 echo "🖥 Opening Chromium..."
-rm -rf /tmp/echify-chrome
-
 chromium \
-  --user-data-dir=/tmp/echify-chrome \
+  --user-data-dir="$CHROME_PROFILE" \
   --disable-application-cache \
   --disable-cache \
   --disable-service-worker \
@@ -133,6 +149,7 @@ echo "✅ All systems active. Press Ctrl+C to stop all processes."
 cleanup() {
     echo "🛑 Stopping all processes..."
     kill $CHROMIUM_PID $CAMERA_PID $BACKEND_PID $SERVER_PID 2>/dev/null
+    pkill -x chromium 2>/dev/null
     exit
 }
 
