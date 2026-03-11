@@ -1,11 +1,12 @@
 import { Audio } from "expo-av";
-import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
 import { connectSocket, closeSocket } from "../services/socket";
 import { sendAudioForSTT } from "../services/stt";
@@ -22,7 +23,6 @@ export default function MainScreen() {
 
   const [isRecording, setIsRecording] = useState(false);
   const [sttText, setSttText] = useState("Say something...");
-  const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const silenceTimerRef = useRef(0);
@@ -32,46 +32,6 @@ export default function MainScreen() {
   const isStoppingRef = useRef(false);
   const isUploadingRef = useRef(false);
   const shouldContinueSpeechRef = useRef(false);
-
-  const speakWord = (word: string) => {
-    const text = word.trim();
-    if (!text) return;
-
-    Speech.stop();
-    Speech.speak(text, {
-      language: "en-US",
-      pitch: 1.0,
-      rate: 0.9,
-    });
-  };
-
-  const requestMicPermission = async () => {
-    try {
-      const current = await Audio.getPermissionsAsync();
-
-      if (current.granted) {
-        setHasMicPermission(true);
-        return true;
-      }
-
-      const requested = await Audio.requestPermissionsAsync();
-      const granted = requested.granted;
-
-      setHasMicPermission(granted);
-
-      if (!granted) {
-        setSttText("Microphone permission denied.");
-        return false;
-      }
-
-      return true;
-    } catch (e) {
-      console.log("requestMicPermission error:", e);
-      setHasMicPermission(false);
-      setSttText("Mic permission error.");
-      return false;
-    }
-  };
 
   useEffect(() => {
     if (activeTab === "sign") {
@@ -95,11 +55,10 @@ export default function MainScreen() {
         }
 
         if (data?.should_speak && Array.isArray(data?.letters_to_speak)) {
-          const word = data.letters_to_speak.join("").trim();
+          const word = data.letters_to_speak.join("");
 
           if (word.length > 0) {
             setFinalWord(word);
-            speakWord(word);
           }
 
           setTypedText("");
@@ -108,28 +67,20 @@ export default function MainScreen() {
       });
     } else {
       closeSocket();
-      Speech.stop();
     }
 
-    return () => {
-      closeSocket();
-      Speech.stop();
-    };
+    return () => closeSocket();
   }, [activeTab]);
 
   useEffect(() => {
-    const setupSpeechTab = async () => {
-      if (activeTab === "speech") {
-        shouldContinueSpeechRef.current = true;
-        await requestMicPermission();
-      } else {
-        shouldContinueSpeechRef.current = false;
-        await stopRecordingAndSend(false, false);
-        setIsRecording(false);
-      }
-    };
-
-    setupSpeechTab();
+    if (activeTab === "speech") {
+      shouldContinueSpeechRef.current = true;
+      startSpeechLoop();
+    } else {
+      shouldContinueSpeechRef.current = false;
+      stopRecordingAndSend(false, false);
+      setIsRecording(false);
+    }
 
     return () => {
       shouldContinueSpeechRef.current = false;
@@ -140,8 +91,16 @@ export default function MainScreen() {
 
   const startSpeechLoop = async () => {
     try {
-      const granted = await requestMicPermission();
-      if (!granted) return;
+      const { granted } = await Audio.requestPermissionsAsync();
+
+      if (!granted) {
+        Alert.alert(
+          "Permission Required",
+          "Please enable microphone access in settings to use Speech to Text."
+        );
+        setActiveTab("sign");
+        return;
+      }
 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -154,6 +113,7 @@ export default function MainScreen() {
     } catch (e) {
       console.log("startSpeechLoop error:", e);
       setSttText("Mic permission error.");
+      setActiveTab("sign");
     }
   };
 
@@ -161,7 +121,6 @@ export default function MainScreen() {
     try {
       if (!shouldContinueSpeechRef.current) return;
       if (recordingRef.current) return;
-      if (!hasMicPermission) return;
 
       setSttText((prev) =>
         prev && prev !== "Say something..." && prev !== "Listening..."
@@ -275,7 +234,11 @@ export default function MainScreen() {
       isUploadingRef.current = false;
       isStoppingRef.current = false;
 
-      if (restartAfter && activeTab === "speech" && shouldContinueSpeechRef.current) {
+      if (
+        restartAfter &&
+        activeTab === "speech" &&
+        shouldContinueSpeechRef.current
+      ) {
         await startRecording();
       }
     }
@@ -299,133 +262,138 @@ export default function MainScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === "sign" && styles.activeTab]}
-          onPress={() => setActiveTab("sign")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "sign" && styles.activeTabText,
-            ]}
+      <View style={styles.mainWrapper}>
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "sign" && styles.activeTab]}
+            onPress={() => setActiveTab("sign")}
           >
-            Sign to Speech
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "sign" && styles.activeTabText,
+              ]}
+            >
+              Sign to Speech
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tab, activeTab === "speech" && styles.activeTab]}
-          onPress={() => setActiveTab("speech")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "speech" && styles.activeTabText,
-            ]}
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "speech" && styles.activeTab]}
+            onPress={() => setActiveTab("speech")}
           >
-            Speech to Text
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "speech" && styles.activeTabText,
+              ]}
+            >
+              Speech to Text
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.content}>
-        {activeTab === "sign" ? (
-          <View style={styles.signLayout}>
-            <View style={styles.cameraPanel}>
-              <CameraComponent />
-            </View>
+        <View style={styles.content}>
+          {activeTab === "sign" ? (
+            <View style={styles.signLayout}>
+              <View style={styles.cameraPanel}>
+                <CameraComponent />
+              </View>
 
-            <View style={styles.translationPanel}>
-              <Text style={styles.translationLabel}>FSL TRANSLATION:</Text>
-              <Text style={styles.translationText}>{signBoxText}</Text>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.speechLayout}>
-            <View style={styles.speechTopPanel}>
-              <View style={styles.waveRow}>
-                <View style={styles.waveWrapper}>
-                  <AudioWave isRecording={isRecording} />
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.toggleButton,
-                    isRecording ? styles.stopButton : styles.startButton,
-                  ]}
-                  onPress={handleSpeechToggle}
-                >
-                  <Text style={styles.toggleButtonText}>
-                    {isRecording ? "Stop" : "Start"}
-                  </Text>
-                </TouchableOpacity>
+              <View style={styles.translationPanel}>
+                <Text style={styles.translationLabel}>FSL TRANSLATION</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={styles.translationText}>{signBoxText}</Text>
+                </ScrollView>
               </View>
             </View>
+          ) : (
+            <View style={styles.speechLayout}>
+              <View style={styles.speechTopPanel}>
+                <View style={styles.waveRow}>
+                  <View style={styles.waveWrapper}>
+                    <AudioWave isRecording={isRecording} />
+                  </View>
 
-            <View style={styles.speechBottomPanel}>
-              <Text style={styles.translationLabel}>SPEECH TO TEXT:</Text>
-              <Text style={styles.translationText}>{sttText}</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleButton,
+                      isRecording ? styles.stopButton : styles.startButton,
+                    ]}
+                    onPress={handleSpeechToggle}
+                  >
+                    <Text style={styles.toggleButtonText}>
+                      {isRecording ? "Stop" : "Start"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.speechBottomPanel}>
+                <Text style={styles.translationLabel}>SPEECH TO TEXT</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={styles.translationText}>{sttText}</Text>
+                </ScrollView>
+              </View>
             </View>
-          </View>
-        )}
+          )}
+        </View>
       </View>
     </View>
   );
 }
 
-const PRIMARY = "#8B4E1D";
-const BG = "#F7F5F3";
-const PANEL = "#EAE6E2";
-const TEXT = "#1D2A39";
-const MUTED = "#7C7A76";
-const TAB_BG = "#D9D4CF";
-const BORDER = "#D8D0C8";
-const GREEN = "#4CAF50";
-const RED = "#C85A54";
+const THEME = {
+  primary: "#8B4E1D",
+  background: "#F7F5F3",
+  panel: "#FFFFFF",
+  text: "#1D2A39",
+  muted: "#7C7A76",
+  border: "#E0DDD9",
+  success: "#4CAF50",
+  danger: "#C85A54",
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BG,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 18,
+    backgroundColor: THEME.background,
   },
 
-  brand: {
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: 7,
-    color: PRIMARY,
-    marginBottom: 10,
+  mainWrapper: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
   },
 
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: TAB_BG,
+    backgroundColor: "#E2E0DD",
     borderRadius: 34,
-    padding: 5,
-    marginBottom: 18,
+    padding: 4,
+    marginBottom: 12,
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
   },
 
   tab: {
     flex: 1,
-    height: 60,
-    borderRadius: 30,
+    height: 36,
+    borderRadius: 60,
     justifyContent: "center",
     alignItems: "center",
   },
 
   activeTab: {
-    backgroundColor: PRIMARY,
+    backgroundColor: THEME.primary,
   },
 
   tabText: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "700",
-    color: MUTED,
+    color: THEME.muted,
   },
 
   activeTabText: {
@@ -439,103 +407,97 @@ const styles = StyleSheet.create({
   signLayout: {
     flex: 1,
     flexDirection: "row",
-    gap: 18,
-    alignItems: "stretch",
+    gap: 12,
   },
 
   cameraPanel: {
-    flex: 1.75,
+    flex: 1.6,
     backgroundColor: "#000",
-    borderRadius: 28,
+    borderRadius: 18,
     overflow: "hidden",
-    minHeight: 420,
+    borderWidth: 1,
+    borderColor: THEME.border,
   },
 
   translationPanel: {
     flex: 1,
-    backgroundColor: PANEL,
-    borderRadius: 28,
+    backgroundColor: THEME.border,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 26,
-    paddingVertical: 24,
-    justifyContent: "flex-start",
-    minHeight: 420,
+    borderColor: THEME.border,
+    maxHeight: "100%",
   },
 
   speechLayout: {
-    flex: 0,
+    flex: 1,
+    gap: 12,
   },
 
   speechTopPanel: {
-    height: 160,
-    backgroundColor: PANEL,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: BORDER,
+    height: 60,
+    paddingHorizontal: 15,
     justifyContent: "center",
-    paddingHorizontal: 20,
   },
 
   waveRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 14,
   },
 
   waveWrapper: {
     flex: 1,
+    height: 30,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
   },
 
   toggleButton: {
-    minWidth: 92,
-    height: 46,
-    borderRadius: 23,
+    minWidth: 70,
+    height: 30,
+    borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 18,
   },
 
   startButton: {
-    backgroundColor: GREEN,
+    backgroundColor: THEME.success,
   },
 
   stopButton: {
-    backgroundColor: RED,
+    backgroundColor: THEME.danger,
   },
 
   toggleButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "800",
   },
 
   speechBottomPanel: {
-    height: 340,
-    backgroundColor: PANEL,
-    borderRadius: 28,
+    flex: 1,
+    backgroundColor: THEME.border,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 28,
-    paddingVertical: 20,
-    justifyContent: "flex-start",
-    marginTop: 18,
+    borderColor: THEME.border,
+    padding: 24,
   },
 
   translationLabel: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: "800",
-    color: PRIMARY,
-    marginBottom: 16,
+    color: THEME.primary,
+    marginBottom: 6,
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
 
   translationText: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: TEXT,
-    lineHeight: 42,
+    fontSize: 16,
+    fontWeight: "700",
+    color: THEME.text,
+    lineHeight: 30,
   },
 });
