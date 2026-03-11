@@ -70,6 +70,8 @@ const styles: any = StyleSheet.create({
     height: "100%",
     objectFit: "cover",
     display: "block",
+    transform: [{ rotate: '180deg' }], 
+    WebkitTransform: 'rotate(180deg)',
   },
   loadingOverlay: {
     position: "absolute",
