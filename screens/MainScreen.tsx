@@ -34,45 +34,56 @@ export default function MainScreen() {
   const shouldContinueSpeechRef = useRef(false);
 
   useEffect(() => {
-    if (activeTab === "sign") {
-      connectSocket((data) => {
-        console.log("📩 WS message:", data);
+  if (activeTab === "sign") {
+    connectSocket((data) => {
+      console.log("📩 WS message:", data);
 
-        const committed = data?.committed_letter;
+      const committed = data?.committed_letter;
 
-        if (typeof committed === "string" && committed.length > 0) {
-          if (!newWordStartedRef.current) {
-            setFinalWord("");
-            setTypedText("");
-            newWordStartedRef.current = true;
-          }
-
-          setTypedText((prev) => (prev || "") + committed);
-          return;
-        }
-
-        const q = data?.queue_text;
-        if (typeof q === "string" && q.length > 0) {
-          setTypedText(q);
-        }
-
-        if (data?.should_speak && Array.isArray(data?.letters_to_speak)) {
-          const word = data.letters_to_speak.join("");
-
-          if (word.length > 0) {
-            setFinalWord(word);
-          }
-
+      if (typeof committed === "string" && committed.length > 0) {
+        if (!newWordStartedRef.current) {
+          setFinalWord("");
           setTypedText("");
-          newWordStartedRef.current = false;
+          newWordStartedRef.current = true;
         }
-      });
-    } else {
-      closeSocket();
-    }
 
-    return () => closeSocket();
-  }, [activeTab]);
+        setTypedText((prev) => (prev || "") + committed);
+        return;
+      }
+
+      const q = data?.queue_text;
+      if (typeof q === "string" && q.length > 0) {
+        setTypedText(q);
+        return;
+      }
+
+      // Show live prediction while waiting for committed letters
+      const prediction = data?.prediction;
+      if (
+        typeof prediction === "string" &&
+        prediction.length > 0 &&
+        prediction !== "UNKNOWN"
+      ) {
+        setTypedText(prediction);
+      }
+
+      if (data?.should_speak && Array.isArray(data?.letters_to_speak)) {
+        const word = data.letters_to_speak.join("");
+
+        if (word.length > 0) {
+          setFinalWord(word);
+        }
+
+        setTypedText("");
+        newWordStartedRef.current = false;
+      }
+    });
+  } else {
+    closeSocket();
+  }
+
+  return () => closeSocket();
+}, [activeTab]);
 
   useEffect(() => {
     if (activeTab === "speech") {

@@ -3,18 +3,14 @@ let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
 let messageCallback: ((data: any) => void) | null = null;
 
-const getWsUrl = () => {
-  const host =
-    typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `ws://${host}:8000/ws/fsl-simple`;
-};
+
 
 export const connectSocket = (onMessage: (data: any) => void) => {
   messageCallback = onMessage;
 
   if (socket && socket.readyState === WebSocket.OPEN) return;
 
-  const WS_URL = getWsUrl();
+  const WS_URL = `ws://localhost:8000/ws/fsl-simple`;
   console.log("🌐 Connecting to WebSocket:", WS_URL);
 
   socket = new WebSocket(WS_URL);

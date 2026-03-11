@@ -45,3 +45,4 @@ package-lock.json
 package.json
 backend/src/stt/__init__.py
 backend/src/tts/__init__.py
+*.pyc

@@ -1,3 +1,4 @@
+#shared_camera.py
 import cv2
 import threading
 import time
@@ -37,6 +38,9 @@ class SharedCamera:
         while self.running:
             ok, frame = self.cap.read()
             if ok:
+                # Rotate 180 degrees so preview + inference are upright
+                frame = cv2.rotate(frame, cv2.ROTATE_180)
+
                 with self.lock:
                     self.frame = frame
             else:

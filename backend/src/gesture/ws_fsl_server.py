@@ -1,3 +1,4 @@
+#ws_fsl_Server.py
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import cv2
 import base64
@@ -13,7 +14,11 @@ router = APIRouter()
 
 
 def frame_to_base64(frame):
-    ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+    ok, buffer = cv2.imencode(
+        ".jpg",
+        frame,
+        [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+    )
     if not ok:
         return None
     return base64.b64encode(buffer.tobytes()).decode("utf-8")
@@ -27,7 +32,17 @@ async def fsl_simple_endpoint(websocket: WebSocket):
     try:
         initialize_fsl_model()
     except Exception as e:
-        await websocket.send_json({"error": str(e), "prediction": "ERROR"})
+        error_result = {
+            "success": False,
+            "prediction": "ERROR",
+            "confidence": 0.0,
+            "message": f"Model init error: {str(e)}",
+            "should_speak": False,
+            "letters_to_speak": [],
+            "committed_letter": None,
+        }
+        print("❌ Model initialization failed:", error_result)
+        await websocket.send_json(error_result)
         await websocket.close()
         return
 
@@ -36,6 +51,7 @@ async def fsl_simple_endpoint(websocket: WebSocket):
             frame = shared_camera.get_frame()
 
             if frame is None:
+                print("⚠️ No frame available from shared camera")
                 await websocket.send_json({
                     "success": False,
                     "prediction": "UNKNOWN",
@@ -43,13 +59,14 @@ async def fsl_simple_endpoint(websocket: WebSocket):
                     "message": "No frame available",
                     "should_speak": False,
                     "letters_to_speak": [],
-                    "committed_letter": None
+                    "committed_letter": None,
                 })
                 await asyncio.sleep(0.1)
                 continue
 
             frame_b64 = frame_to_base64(frame)
             if not frame_b64:
+                print("⚠️ Failed to encode frame")
                 await asyncio.sleep(0.05)
                 continue
 
@@ -63,3 +80,15 @@ async def fsl_simple_endpoint(websocket: WebSocket):
         print("🔌 Client disconnected from /ws/fsl-simple")
     except Exception as e:
         print(f"❌ WebSocket error: {e}")
+        try:
+            await websocket.send_json({
+                "success": False,
+                "prediction": "ERROR",
+                "confidence": 0.0,
+                "message": f"WebSocket error: {str(e)}",
+                "should_speak": False,
+                "letters_to_speak": [],
+                "committed_letter": None,
+            })
+        except Exception:
+            pass
