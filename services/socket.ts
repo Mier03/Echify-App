@@ -50,14 +50,8 @@ export const connectSocket = (onMessage: (data: any) => void) => {
   };
 };
 
-export const sendFrame = (frameBase64: string) => {
-  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-  try {
-    socket.send(frameBase64);
-    return true;
-  } catch {
-    return false;
-  }
+export const sendFrame = (_frameBase64: string) => {
+  return false;
 };
 
 export const closeSocket = () => {

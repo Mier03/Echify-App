@@ -1,22 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
-import {
-  CameraView as ExpoCameraView,
-  useCameraPermissions,
-} from "expo-camera";
-import { sendFrame } from "../services/socket";
+import React, { useMemo, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 interface CameraViewProps {
   onPrediction?: (prediction: string) => void;
 }
 
 export default function CameraView({ onPrediction }: CameraViewProps) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<any>(null);
-
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isCameraReady, setIsCameraReady] = useState(false);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
@@ -26,157 +15,44 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
     return `http://${host}:8000/preview`;
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const initializeCamera = async () => {
-      try {
-        if (permission?.granted === true) {
-          if (isMounted) setIsInitialized(true);
-          return;
-        }
-
-        if (permission?.canAskAgain !== false) {
-          const result = await requestPermission();
-          console.log("requestPermission result:", result);
-        }
-
-        if (isMounted) setIsInitialized(true);
-      } catch (error) {
-        console.error("Camera permission error:", error);
-        if (isMounted) {
-          setCameraError("Camera permission error");
-          setIsInitialized(true);
-        }
-      }
-    };
-
-    const timer = setTimeout(() => {
-      initializeCamera();
-    }, 300);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, [permission, requestPermission]);
-
-  useEffect(() => {
-    if (!isInitialized || !permission?.granted || !isCameraReady) {
-      return;
-    }
-
-    let isActive = true;
-    setIsCapturing(true);
-
-    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-    const captureLoop = async () => {
-      await delay(1000);
-
-      while (isActive) {
-        try {
-          if (!cameraRef.current) {
-            await delay(300);
-            continue;
-          }
-
-          const photo = await cameraRef.current.takePictureAsync({
-            base64: true,
-            quality: 0.5,
-            skipProcessing: false,
-          });
-
-          if (photo?.base64) {
-            sendFrame(photo.base64);
-          }
-        } catch (err) {
-          console.log("Frame capture error:", err);
-        }
-
-        await delay(700);
-      }
-    };
-
-    captureLoop();
-
-    return () => {
-      isActive = false;
-      setIsCapturing(false);
-    };
-  }, [isInitialized, permission?.granted, isCameraReady]);
-
-  if (!isInitialized) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={styles.loadingText}>Initializing camera...</Text>
-      </View>
-    );
-  }
-
-  if (!permission?.granted) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Camera permission not granted</Text>
-        <Text style={styles.loadingSubtext}>
-          Chromium still needs camera permission for hidden frame capture.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {!previewLoaded && (
+      {!previewLoaded && !cameraError && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#4CAF50" />
           <Text style={styles.loadingText}>Loading preview...</Text>
         </View>
       )}
 
-      <img
-        src={previewUrl}
-        alt="Camera Preview"
-        style={styles.previewImage as any}
-        onLoad={() => {
-          setPreviewLoaded(true);
-          setCameraError("");
-        }}
-        onError={() => {
-          setPreviewLoaded(false);
-          setCameraError("Preview unavailable");
-        }}
-      />
-
-      <View style={styles.hiddenCameraWrapper}>
-        <ExpoCameraView
-          ref={cameraRef}
-          style={styles.hiddenCamera}
-          facing="back"
-          mute={true}
-          onCameraReady={() => {
-            console.log("Hidden camera ready");
-            setIsCameraReady(true);
+      {cameraError ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Preview unavailable</Text>
+          <Text style={styles.loadingSubtext}>
+            Check backend stream on port 8000.
+          </Text>
+        </View>
+      ) : (
+        <img
+          src={previewUrl}
+          alt="Camera Preview"
+          style={styles.previewImage as any}
+          onLoad={() => {
+            setPreviewLoaded(true);
+            setCameraError("");
+          }}
+          onError={() => {
+            setPreviewLoaded(false);
+            setCameraError("Preview unavailable");
           }}
         />
-      </View>
+      )}
 
       <View style={styles.statusIndicator}>
         <View
-          style={[
-            styles.statusDot,
-            isCapturing && previewLoaded && styles.statusDotActive,
-          ]}
+          style={[styles.statusDot, previewLoaded && styles.statusDotActive]}
         />
         <Text style={styles.statusText}>
-          {cameraError
-            ? cameraError
-            : isCapturing
-            ? "Live + Capturing"
-            : previewLoaded
-            ? "Preview Ready"
-            : "Idle"}
+          {cameraError ? "Offline" : previewLoaded ? "Live" : "Loading"}
         </Text>
       </View>
     </View>
@@ -194,19 +70,6 @@ const styles: any = StyleSheet.create({
     height: "100%",
     objectFit: "cover",
     display: "block",
-  },
-  hiddenCameraWrapper: {
-    position: "absolute",
-    width: 1,
-    height: 1,
-    left: -9999,
-    top: -9999,
-    overflow: "hidden",
-    opacity: 0,
-  },
-  hiddenCamera: {
-    width: 1,
-    height: 1,
   },
   loadingOverlay: {
     position: "absolute",
