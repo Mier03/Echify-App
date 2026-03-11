@@ -45,9 +45,6 @@ if [ ! -e /dev/video10 ]; then
     exit 1
 fi
 
-# ---------------------------
-# Build Web UI
-# ---------------------------
 echo "🔨 Building Web UI..."
 cd "$BASE_DIR" || exit 1
 rm -rf "$BASE_DIR/dist"
@@ -65,9 +62,6 @@ fi
 
 echo "✅ Web UI built successfully"
 
-# ---------------------------
-# Start Web Server (Port 3000)
-# ---------------------------
 echo "🌐 Starting Web Server..."
 cd "$BASE_DIR/dist" || exit 1
 python3 -m http.server 3000 > "$BASE_DIR/web.log" 2>&1 &
@@ -83,9 +77,6 @@ fi
 
 echo "✅ Web server running on http://localhost:3000"
 
-# ---------------------------
-# Start Backend (Port 8000)
-# ---------------------------
 echo "🚀 Starting Backend..."
 cd "$BASE_DIR/backend" || exit 1
 source "$BASE_DIR/venv/bin/activate"
@@ -103,9 +94,6 @@ fi
 
 echo "✅ Backend running on http://localhost:8000"
 
-# ---------------------------
-# Start Camera Engine
-# ---------------------------
 echo "📷 Starting Camera Engine..."
 cd "$BASE_DIR/hardware/camera" || exit 1
 "$BASE_DIR/venv/bin/python" camera_engine.py > "$BASE_DIR/camera.log" 2>&1 &
@@ -125,9 +113,6 @@ echo "✅ Camera engine running"
 echo "⏳ Waiting for virtual webcam to stabilize..."
 sleep 5
 
-# ---------------------------
-# Open Chromium
-# ---------------------------
 echo "🖥 Opening Chromium..."
 chromium \
   --user-data-dir="$CHROME_PROFILE" \
@@ -139,6 +124,11 @@ chromium \
   --use-fake-ui-for-media-stream \
   --no-sandbox \
   --test-type \
+  --disable-gpu \
+  --disable-gpu-compositing \
+  --disable-accelerated-video-decode \
+  --disable-accelerated-2d-canvas \
+  --disable-features=UseSkiaRenderer,VaapiVideoDecoder \
   --kiosk &
 
 CHROMIUM_PID=$!
