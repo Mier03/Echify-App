@@ -34,6 +34,17 @@ sleep 3
 echo "🧹 Cleaning old Chromium profile..."
 rm -rf "$CHROME_PROFILE"
 
+echo "🎥 Preparing virtual webcam..."
+sudo modprobe -r v4l2loopback 2>/dev/null
+sudo modprobe v4l2loopback video_nr=10 card_label='Echify-Camera' exclusive_caps=1
+sudo chmod 777 /dev/video10
+sleep 2
+
+if [ ! -e /dev/video10 ]; then
+    echo "❌ /dev/video10 not found after modprobe"
+    exit 1
+fi
+
 # ---------------------------
 # Build Web UI
 # ---------------------------
@@ -114,15 +125,6 @@ echo "✅ Camera engine running"
 echo "⏳ Waiting for virtual webcam to stabilize..."
 sleep 5
 
-# Optional device check
-if [ -e /dev/video10 ]; then
-    echo "✅ Virtual webcam found at /dev/video10"
-else
-    echo "❌ /dev/video10 not found"
-    kill $CAMERA_PID $BACKEND_PID $SERVER_PID 2>/dev/null
-    exit 1
-fi
-
 # ---------------------------
 # Open Chromium
 # ---------------------------
@@ -143,9 +145,6 @@ CHROMIUM_PID=$!
 
 echo "✅ All systems active. Press Ctrl+C to stop all processes."
 
-# ---------------------------
-# Cleanup on Exit
-# ---------------------------
 cleanup() {
     echo "🛑 Stopping all processes..."
     kill $CHROMIUM_PID $CAMERA_PID $BACKEND_PID $SERVER_PID 2>/dev/null
