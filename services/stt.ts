@@ -1,48 +1,61 @@
-import { Platform } from "react-native";
+let sttSocket: WebSocket | null = null;
+let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+let sttMessageCallback: ((data: any) => void) | null = null;
 
-const STT_URL = "http://localhost:8000/stt";
+const getSttWsUrl = () => {
+  const host =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
+  return `ws://${host}:8000/ws/stt-live`;
+};
 
-export async function sendAudioForSTT(uri: string): Promise<string> {
-  console.log("🎤 Uploading audio:", uri);
+export const connectSttSocket = (onMessage: (data: any) => void) => {
+  sttMessageCallback = onMessage;
 
-  const formData = new FormData();
+  if (sttSocket && sttSocket.readyState === WebSocket.OPEN) return;
 
-  if (Platform.OS === "web") {
-    // On web, convert the recorded URI/blob URL into a real Blob
-    const fileResponse = await fetch(uri);
-    const blob = await fileResponse.blob();
+  const WS_URL = getSttWsUrl();
+  console.log("🎤 Connecting STT WebSocket:", WS_URL);
 
-    formData.append("file", blob, "audio.webm");
-  } else {
-    // On Android/iOS, keep the React Native file object style
-    formData.append("file", {
-      uri,
-      name: "audio.m4a",
-      type: "audio/mp4",
-    } as any);
-  }
+  sttSocket = new WebSocket(WS_URL);
 
-  let res: Response;
+  sttSocket.onopen = () => {
+    console.log("✅ STT WebSocket connected");
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+  };
 
-  try {
-    res = await fetch(STT_URL, {
-      method: "POST",
-      body: formData,
-    });
-  } catch (e) {
-    console.log("❌ fetch failed:", e);
-    throw e;
-  }
+  sttSocket.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (sttMessageCallback) sttMessageCallback(data);
+    } catch (err) {
+      console.log("STT socket parse error:", err);
+    }
+  };
 
-  console.log("✅ STT status:", res.status);
+  sttSocket.onerror = () => {
+    console.log("❌ STT WebSocket error");
+  };
 
-  const textBody = await res.text();
-  console.log("✅ STT raw body:", textBody);
+  sttSocket.onclose = () => {
+    console.log("🔌 STT WebSocket closed");
+    sttSocket = null;
 
-  try {
-    const json = JSON.parse(textBody);
-    return json.text ?? "";
-  } catch {
-    return textBody;
-  }
-}
+    if (!reconnectTimeout) {
+      reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null;
+        if (sttMessageCallback) connectSttSocket(sttMessageCallback);
+      }, 3000);
+    }
+  };
+};
+
+export const closeSttSocket = () => {
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  reconnectTimeout = null;
+  sttMessageCallback = null;
+  sttSocket?.close();
+  sttSocket = null;
+};
