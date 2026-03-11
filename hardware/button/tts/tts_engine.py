@@ -9,7 +9,7 @@ class EmergencyAudio:
     def __init__(self, mp3_name="help_me.mp3"):
         # This looks for the mp3 in the main fsl_project folder
         # We use absolute paths to ensure the Pi finds it
-        self.mp3_path = "/home/sms/fsl_project/help_me.mp3"
+        self.mp3_path = "/home/sms/Echify-App/hardware/button/help_me.mp3"
 
     def play_help_instant(self):
         def _run():
