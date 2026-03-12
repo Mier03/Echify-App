@@ -1,6 +1,6 @@
 #!/bin/bash
 #start_up.sh
-BASE_DIR="/home/sms/Echify-App"
+BASE_DIR="/home/sms/Echify-App/mobile"
 MODEL_PATH="$BASE_DIR/backend/models"
 CHROME_PROFILE="/home/sms/.echify-profile"
 
