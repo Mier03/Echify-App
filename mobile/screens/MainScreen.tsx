@@ -1,7 +1,5 @@
-import { Audio } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,7 +7,7 @@ import {
   ScrollView,
 } from "react-native";
 import { connectSocket, closeSocket } from "../services/socket";
-import { sendAudioForSTT } from "../services/stt";
+import { connectSttSocket, closeSttSocket } from "../services/stt";
 
 import AudioWave from "../components/AudioWave";
 import CameraComponent from "../components/CameraView";
@@ -23,248 +21,100 @@ export default function MainScreen() {
 
   const [isRecording, setIsRecording] = useState(false);
   const [sttText, setSttText] = useState("Say something...");
-
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const silenceTimerRef = useRef(0);
-  const speechStartedRef = useRef(false);
-  const speechDurationRef = useRef(0);
-
-  const isStoppingRef = useRef(false);
-  const isUploadingRef = useRef(false);
-  const shouldContinueSpeechRef = useRef(false);
+  const [isSpeechListening, setIsSpeechListening] = useState(false);
 
   useEffect(() => {
-  if (activeTab === "sign") {
-    connectSocket((data) => {
-      console.log("📩 WS message:", data);
+    if (activeTab === "sign") {
+      connectSocket((data) => {
+        console.log("📩 WS message:", data);
 
-      const committed = data?.committed_letter;
+        const committed = data?.committed_letter;
 
-      if (typeof committed === "string" && committed.length > 0) {
-        if (!newWordStartedRef.current) {
-          setFinalWord("");
+        if (typeof committed === "string" && committed.length > 0) {
+          if (!newWordStartedRef.current) {
+            setFinalWord("");
+            setTypedText("");
+            newWordStartedRef.current = true;
+          }
+
+          setTypedText((prev) => (prev || "") + committed);
+          return;
+        }
+
+        const q = data?.queue_text;
+        if (typeof q === "string" && q.length > 0) {
+          setTypedText(q);
+          return;
+        }
+
+        const prediction = data?.prediction;
+        if (
+          typeof prediction === "string" &&
+          prediction.length > 0 &&
+          prediction !== "UNKNOWN"
+        ) {
+          setTypedText(prediction);
+        }
+
+        if (data?.should_speak && Array.isArray(data?.letters_to_speak)) {
+          const word = data.letters_to_speak.join("");
+
+          if (word.length > 0) {
+            setFinalWord(word);
+          }
+
           setTypedText("");
-          newWordStartedRef.current = true;
+          newWordStartedRef.current = false;
         }
+      });
 
-        setTypedText((prev) => (prev || "") + committed);
-        return;
-      }
-
-      const q = data?.queue_text;
-      if (typeof q === "string" && q.length > 0) {
-        setTypedText(q);
-        return;
-      }
-
-      // Show live prediction while waiting for committed letters
-      const prediction = data?.prediction;
-      if (
-        typeof prediction === "string" &&
-        prediction.length > 0 &&
-        prediction !== "UNKNOWN"
-      ) {
-        setTypedText(prediction);
-      }
-
-      if (data?.should_speak && Array.isArray(data?.letters_to_speak)) {
-        const word = data.letters_to_speak.join("");
-
-        if (word.length > 0) {
-          setFinalWord(word);
-        }
-
-        setTypedText("");
-        newWordStartedRef.current = false;
-      }
-    });
-  } else {
-    closeSocket();
-  }
-
-  return () => closeSocket();
-}, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab === "speech") {
-      shouldContinueSpeechRef.current = true;
-      startSpeechLoop();
-    } else {
-      shouldContinueSpeechRef.current = false;
-      stopRecordingAndSend(false, false);
+      closeSttSocket();
       setIsRecording(false);
+      setIsSpeechListening(false);
+    } else {
+      closeSocket();
+
+      if (isSpeechListening) {
+        connectSttSocket((data) => {
+          console.log("🎤 STT message:", data);
+
+          if (data?.type === "level") {
+            setIsRecording(!!data.isRecording);
+          }
+
+          if (data?.type === "transcript") {
+            const text = (data.text || "").trim();
+            setSttText(text || "…");
+          }
+
+          if (data?.type === "error") {
+            setSttText(data.message || "STT error.");
+            setIsRecording(false);
+          }
+        });
+      } else {
+        closeSttSocket();
+        setIsRecording(false);
+      }
     }
 
     return () => {
-      shouldContinueSpeechRef.current = false;
-      stopRecordingAndSend(false, false);
+      closeSocket();
+      closeSttSocket();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
-
-  const startSpeechLoop = async () => {
-    try {
-      const { granted } = await Audio.requestPermissionsAsync();
-
-      if (!granted) {
-        Alert.alert(
-          "Permission Required",
-          "Please enable microphone access in settings to use Speech to Text."
-        );
-        setActiveTab("sign");
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      if (shouldContinueSpeechRef.current) {
-        await startRecording();
-      }
-    } catch (e) {
-      console.log("startSpeechLoop error:", e);
-      setSttText("Mic permission error.");
-      setActiveTab("sign");
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      if (!shouldContinueSpeechRef.current) return;
-      if (recordingRef.current) return;
-
-      setSttText((prev) =>
-        prev && prev !== "Say something..." && prev !== "Listening..."
-          ? prev
-          : "Listening..."
-      );
-
-      setIsRecording(true);
-
-      speechStartedRef.current = false;
-      silenceTimerRef.current = 0;
-      speechDurationRef.current = 0;
-
-      const rec = new Audio.Recording();
-      recordingRef.current = rec;
-
-      await rec.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      rec.setProgressUpdateInterval(100);
-
-      const silenceDbThreshold = -35;
-      const silenceSecondsToStop = 1.0;
-      const minSpeechSeconds = 0.3;
-      const frameSec = 0.1;
-
-      rec.setOnRecordingStatusUpdate((status) => {
-        if (!status.isRecording) return;
-
-        const db = (status as any).metering;
-        if (typeof db !== "number") return;
-
-        if (db > silenceDbThreshold) {
-          speechStartedRef.current = true;
-          silenceTimerRef.current = 0;
-          speechDurationRef.current += frameSec;
-        } else if (speechStartedRef.current) {
-          silenceTimerRef.current += frameSec;
-        }
-
-        if (
-          speechStartedRef.current &&
-          speechDurationRef.current >= minSpeechSeconds &&
-          silenceTimerRef.current >= silenceSecondsToStop
-        ) {
-          if (isStoppingRef.current || isUploadingRef.current) return;
-          stopRecordingAndSend(true, true);
-        }
-      });
-
-      await rec.startAsync();
-    } catch (e) {
-      console.log("startRecording error:", e);
-      recordingRef.current = null;
-      setIsRecording(false);
-      setSttText("Mic error.");
-    }
-  };
-
-  const stopRecordingAndSend = async (
-    restartAfter: boolean,
-    shouldTranscribe: boolean
-  ) => {
-    if (isStoppingRef.current) return;
-    isStoppingRef.current = true;
-
-    const rec = recordingRef.current;
-    if (!rec) {
-      isStoppingRef.current = false;
-      return;
-    }
-
-    try {
-      recordingRef.current = null;
-      setIsRecording(false);
-
-      await rec.stopAndUnloadAsync();
-      const uri = rec.getURI();
-
-      if (!uri) {
-        setSttText((prev) => prev || "No audio captured.");
-        return;
-      }
-
-      if (!shouldTranscribe) return;
-
-      if (isUploadingRef.current) return;
-      isUploadingRef.current = true;
-
-      setSttText((prev) =>
-        prev && prev !== "Say something..." ? prev : "Transcribing..."
-      );
-
-      const text = await sendAudioForSTT(uri);
-
-      setSttText((prev) => {
-        const t = (text || "").trim();
-        if (!t) return prev || "…";
-        if (
-          !prev ||
-          prev === "Say something..." ||
-          prev === "Listening..." ||
-          prev === "Transcribing..."
-        ) {
-          return t;
-        }
-        return t || "…";
-      });
-    } catch (e) {
-      console.log("stop/send error:", e);
-      setSttText((prev) => (prev ? prev : "STT error."));
-    } finally {
-      isUploadingRef.current = false;
-      isStoppingRef.current = false;
-
-      if (
-        restartAfter &&
-        activeTab === "speech" &&
-        shouldContinueSpeechRef.current
-      ) {
-        await startRecording();
-      }
-    }
-  };
+  }, [activeTab, isSpeechListening]);
 
   const handleSpeechToggle = async () => {
-    if (isRecording) {
-      await stopRecordingAndSend(false, true);
+    if (isSpeechListening) {
+      setIsSpeechListening(false);
+      setIsRecording(false);
+      setSttText((prev) =>
+        prev && prev !== "Say something..." ? prev : "Say something..."
+      );
+      closeSttSocket();
     } else {
-      shouldContinueSpeechRef.current = true;
-      await startSpeechLoop();
+      setSttText("Listening...");
+      setIsSpeechListening(true);
     }
   };
 
@@ -337,12 +187,12 @@ export default function MainScreen() {
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      isRecording ? styles.stopButton : styles.startButton,
+                      isSpeechListening ? styles.stopButton : styles.startButton,
                     ]}
                     onPress={handleSpeechToggle}
                   >
                     <Text style={styles.toggleButtonText}>
-                      {isRecording ? "Stop" : "Start"}
+                      {isSpeechListening ? "Stop" : "Start"}
                     </Text>
                   </TouchableOpacity>
                 </View>

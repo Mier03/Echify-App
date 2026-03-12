@@ -1,6 +1,7 @@
 #!/bin/bash
-#start_up.sh
-BASE_DIR="/home/sms/Echify-App/"
+# start_up.sh
+
+BASE_DIR="/home/sms/Echify-App"
 MODEL_PATH="$BASE_DIR/backend/models"
 CHROME_PROFILE="/home/sms/.echify-profile"
 
@@ -119,6 +120,16 @@ cd "$BASE_DIR/hardware/button" || exit 1
 "$BASE_DIR/venv/bin/python" emergency_button.py > "$BASE_DIR/button.log" 2>&1 &
 BUTTON_PID=$!
 
+sleep 2
+
+if ! kill -0 $BUTTON_PID 2>/dev/null; then
+    echo "❌ Button listener failed to start"
+    echo "Check: $BASE_DIR/button.log"
+    kill $BACKEND_PID $CAMERA_PID $SERVER_PID 2>/dev/null
+    exit 1
+fi
+
+echo "✅ Button listener running"
 
 echo "🖥 Opening Chromium..."
 chromium \
