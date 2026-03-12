@@ -1,6 +1,6 @@
 #!/bin/bash
 #start_up.sh
-BASE_DIR="/home/sms/Echify-App/mobile"
+BASE_DIR="/home/sms/Echify-App/"
 MODEL_PATH="$BASE_DIR/backend/models"
 CHROME_PROFILE="/home/sms/.echify-profile"
 
@@ -47,7 +47,7 @@ if [ ! -e /dev/video10 ]; then
 fi
 
 echo "🔨 Building Web UI..."
-cd "$BASE_DIR" || exit 1
+cd "$BASE_DIR/mobile" || exit 1
 rm -rf "$BASE_DIR/dist"
 npx expo export -p web --clear
 
