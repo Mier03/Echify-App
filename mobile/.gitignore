@@ -41,8 +41,6 @@ app-example
 # generated native folders
 /ios
 /android
-package-lock.json
-package.json
 backend/src/stt/__init__.py
 backend/src/tts/__init__.py
 *.pyc
