@@ -306,6 +306,14 @@ def predict_fsl_static(frame_base64, confidence_threshold=0.6):
                 letters_to_speak = list(_letter_queue)
                 _letter_queue.clear()
                 should_speak = True
+
+                try:
+                    word_to_speak = "".join(letters_to_speak)
+                    if word_to_speak:
+                        speak(word_to_speak)
+                except Exception as e:
+                    print(f"❌ Speak error: {e}")
+
             _unknown_start = None
 
         return {
