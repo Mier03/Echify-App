@@ -1,3 +1,4 @@
+// stt.ts
 let sttSocket: WebSocket | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 let sttMessageCallback: ((data: any) => void) | null = null;
@@ -50,6 +51,18 @@ export const connectSttSocket = (onMessage: (data: any) => void) => {
       }, 3000);
     }
   };
+};
+
+export const startSttListening = () => {
+  if (sttSocket && sttSocket.readyState === WebSocket.OPEN) {
+    sttSocket.send(JSON.stringify({ action: "start" }));
+  }
+};
+
+export const stopSttListening = () => {
+  if (sttSocket && sttSocket.readyState === WebSocket.OPEN) {
+    sttSocket.send(JSON.stringify({ action: "stop" }));
+  }
 };
 
 export const closeSttSocket = () => {

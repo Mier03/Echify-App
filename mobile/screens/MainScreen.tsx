@@ -7,7 +7,12 @@ import {
   ScrollView,
 } from "react-native";
 import { connectSocket, closeSocket } from "../services/socket";
-import { connectSttSocket, closeSttSocket } from "../services/stt";
+import {
+  connectSttSocket,
+  closeSttSocket,
+  startSttListening,
+  stopSttListening,
+} from "../services/stt";
 
 import AudioWave from "../components/AudioWave";
 import CameraComponent from "../components/CameraView";
@@ -104,17 +109,19 @@ export default function MainScreen() {
     };
   }, [activeTab, isSpeechListening]);
 
-  const handleSpeechToggle = async () => {
+ const handleSpeechToggle = async () => {
     if (isSpeechListening) {
+      stopSttListening();
       setIsSpeechListening(false);
       setIsRecording(false);
-      setSttText((prev) =>
-        prev && prev !== "Say something..." ? prev : "Say something..."
-      );
-      closeSttSocket();
     } else {
       setSttText("Listening...");
       setIsSpeechListening(true);
+
+      // ensure socket is connected before sending start
+      setTimeout(() => {
+        startSttListening();
+      }, 300);
     }
   };
 
