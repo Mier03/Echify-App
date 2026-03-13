@@ -112,6 +112,9 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
             frame_b64 = await websocket.receive_text()
             frame_count += 1
 
+            if frame_count <= 5 or frame_count % 30 == 0:
+                print(f"📥 Frame received from {client_id} | frame #{frame_count} | size={len(frame_b64)}")
+
             frame = _decode_frame(frame_b64)
             if frame is None:
                 error_payload = {
@@ -133,6 +136,9 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                 await websocket.send_json(error_payload)
                 continue
 
+            if frame is not None and (frame_count <= 5 or frame_count % 30 == 0):
+                print(f"🖼 Decoded frame #{frame_count} | shape={frame.shape}")
+
             # ── T2: inference/update ───────────────────────────────────────
             t2_infer_start = time.monotonic()
             result = update_and_maybe_predict(frame)
@@ -149,6 +155,14 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
             is_ready = bool(result.get("is_ready", False))
             top1_label = result.get("top1_label", "Waiting...")
             hands_now = consec_hand > 0
+
+            if frame_count <= 5 or frame_count % 30 == 0:
+                print(
+                    f"🧠 Result #{frame_count} | "
+                    f"label={result.get('top1_label')} | "
+                    f"ready={result.get('is_ready')} | "
+                    f"debug={result.get('debug', {})}"
+                )
 
             # ── Status key for terminal logging ────────────────────────────
             if is_ready:

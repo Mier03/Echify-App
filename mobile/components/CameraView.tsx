@@ -13,6 +13,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   const imgRef = useRef<HTMLImageElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sentPreviewCountRef = useRef(0);
 
   const previewUrl = useMemo(() => {
     const host =
@@ -33,7 +34,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Resize down a bit for speed on Pi
+      // Resize for Pi performance
       const targetWidth = 320;
       const targetHeight = 240;
 
@@ -44,13 +45,32 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
 
       try {
         const frameBase64 = canvas.toDataURL("image/jpeg", 0.6);
-        sendFrame(frameBase64);
+
+        sentPreviewCountRef.current += 1;
+
+        if (
+          sentPreviewCountRef.current <= 5 ||
+          sentPreviewCountRef.current % 30 === 0
+        ) {
+          console.log(
+            `🎥 Captured frame #${sentPreviewCountRef.current}, length=${frameBase64.length}`,
+          );
+        }
+
+        const ok = sendFrame(frameBase64);
+
+        if (
+          sentPreviewCountRef.current <= 5 ||
+          sentPreviewCountRef.current % 30 === 0
+        ) {
+          console.log(`📡 sendFrame result: ${ok}`);
+        }
       } catch (e) {
         console.log("❌ Failed to capture/send frame:", e);
       }
     };
 
-    // about 8 FPS, safer for Pi
+    // About 8 FPS for Raspberry Pi
     frameTimerRef.current = setInterval(sendCurrentFrame, 120);
 
     return () => {

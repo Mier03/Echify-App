@@ -21,7 +21,7 @@ export const connectSocket = (onMessage: (data: any) => void) => {
   socket = new WebSocket(WS_URL);
 
   socket.onopen = () => {
-    console.log("✅ WebSocket connected");
+    console.log("✅ WebSocket connected:", WS_URL);
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -41,8 +41,17 @@ export const connectSocket = (onMessage: (data: any) => void) => {
     console.log("❌ WebSocket error");
   };
 
-  socket.onclose = () => {
-    console.log("🔌 WebSocket closed");
+  socket.onclose = (event) => {
+    console.log(
+      "🔌 WebSocket closed",
+      JSON.stringify({
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+        manuallyClosed,
+      }),
+    );
+
     socket = null;
 
     if (!manuallyClosed && !reconnectTimeout && messageCallback) {
@@ -54,13 +63,27 @@ export const connectSocket = (onMessage: (data: any) => void) => {
   };
 };
 
+let sentCount = 0;
+
 export const sendFrame = (frameBase64: string) => {
-  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    if (sentCount < 5) {
+      console.log("⚠️ sendFrame skipped: socket not open");
+    }
+    return false;
+  }
 
   try {
     socket.send(frameBase64);
+    sentCount += 1;
+
+    if (sentCount <= 5 || sentCount % 30 === 0) {
+      console.log(`📤 Sent frame #${sentCount}, length=${frameBase64.length}`);
+    }
+
     return true;
-  } catch {
+  } catch (e) {
+    console.log("❌ sendFrame failed", e);
     return false;
   }
 };
