@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  ScrollView,
 } from "react-native";
-import { connectSocket, closeSocket } from "../services/socket";
+import { closeSocket, connectSocket } from "../services/socket";
 import {
-  connectSttSocket,
   closeSttSocket,
+  connectSttSocket,
   startSttListening,
   stopSttListening,
 } from "../services/stt";
@@ -17,60 +18,128 @@ import {
 import AudioWave from "../components/AudioWave";
 import CameraComponent from "../components/CameraView";
 
+// TTS plays through Pi's MAX 98375A speaker via backend speak()
+const SENTENCE_DISPLAY_MS = 4000;
+
 export default function MainScreen() {
   const [activeTab, setActiveTab] = useState<"sign" | "speech">("sign");
 
-  const [typedText, setTypedText] = useState("");
-  const [finalWord, setFinalWord] = useState("");
-  const newWordStartedRef = useRef(false);
+  // ── Sign tab state (dynamic) ──────────────────────────────────────────────
+  const [signedWords, setSignedWords] = useState<string[]>([]);
+  const [finalSentence, setFinalSentence] = useState("");
+  const [signStatus, setSignStatus] = useState("Waiting for sign...");
 
+  // ── Speech tab state (KEEP PI HARDWARE FLOW) ─────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
   const [sttText, setSttText] = useState("Say something...");
   const [isSpeechListening, setIsSpeechListening] = useState(false);
 
-  // Sign websocket effect
+  const autoClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Animations ────────────────────────────────────────────────────────────
+  const sentenceFade = useRef(new Animated.Value(0)).current;
+  const sentenceSlide = useRef(new Animated.Value(16)).current;
+  const chipsFade = useRef(new Animated.Value(0)).current;
+  const sentenceOut = useRef(new Animated.Value(1)).current;
+
+  const animateSentenceIn = () => {
+    sentenceOut.setValue(1);
+    sentenceFade.setValue(0);
+    sentenceSlide.setValue(16);
+
+    Animated.parallel([
+      Animated.timing(sentenceFade, {
+        toValue: 1,
+        duration: 380,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sentenceSlide, {
+        toValue: 0,
+        duration: 380,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const animateSentenceOut = (onDone: () => void) => {
+    Animated.timing(sentenceOut, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(onDone);
+  };
+
+  const animateChipIn = () => {
+    chipsFade.setValue(0);
+    Animated.timing(chipsFade, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const scheduleAutoClear = () => {
+    if (autoClearTimerRef.current) clearTimeout(autoClearTimerRef.current);
+
+    autoClearTimerRef.current = setTimeout(() => {
+      animateSentenceOut(() => {
+        setFinalSentence("");
+        setSignedWords([]);
+        setSignStatus("Waiting for sign...");
+        sentenceFade.setValue(0);
+        sentenceOut.setValue(1);
+      });
+    }, SENTENCE_DISPLAY_MS);
+  };
+
+  // ── Sign websocket effect (dynamic sign flow) ────────────────────────────
   useEffect(() => {
     if (activeTab === "sign") {
       connectSocket((data) => {
         console.log("📩 WS message:", data);
 
-        const committed = data?.committed_letter;
+        const isReady = data?.is_ready === true;
+        const label = data?.top1_label ?? "";
+        const conf = data?.top1_conf ?? 0;
+        const dbg = data?.debug ?? {};
 
-        if (typeof committed === "string" && committed.length > 0) {
-          if (!newWordStartedRef.current) {
-            setFinalWord("");
-            setTypedText("");
-            newWordStartedRef.current = true;
-          }
-
-          setTypedText((prev) => (prev || "") + committed);
+        // Sentence can arrive on any frame
+        const sentence = data?.sentence_english;
+        if (typeof sentence === "string" && sentence.trim().length > 0) {
+          setFinalSentence(sentence);
+          setSignedWords([]);
+          animateSentenceIn();
+          setSignStatus("💬 Speaking on Pi speaker...");
+          scheduleAutoClear();
           return;
         }
 
-        const q = data?.queue_text;
-        if (typeof q === "string" && q.length > 0) {
-          setTypedText(q);
+        const isCollecting = label === "Collecting...";
+        const isWaiting = label === "Waiting...";
+        const isTooShort = label === "Too short / ignored";
+
+        if (isCollecting || dbg.collecting) {
+          setSignStatus(`✋ Signing... (${dbg.frames_collected ?? 0} frames)`);
           return;
         }
 
-        const prediction = data?.prediction;
-        if (
-          typeof prediction === "string" &&
-          prediction.length > 0 &&
-          prediction !== "UNKNOWN"
-        ) {
-          setTypedText(prediction);
+        if (dbg.hands_detected && !isReady) {
+          setSignStatus("👋 Hand detected...");
+          return;
         }
 
-        if (data?.should_speak && Array.isArray(data?.letters_to_speak)) {
-          const word = data.letters_to_speak.join("");
+        if (!isReady || isWaiting || isTooShort) {
+          setSignStatus((prev) =>
+            prev.startsWith("💬") ? prev : "Waiting for sign...",
+          );
+          return;
+        }
 
-          if (word.length > 0) {
-            setFinalWord(word);
-          }
-
-          setTypedText("");
-          newWordStartedRef.current = false;
+        // Single sign recognized → add chip
+        if (typeof label === "string" && label.length > 0 && conf >= 0.4) {
+          setSignedWords((prev) => [...prev, label]);
+          animateChipIn();
+          setSignStatus(`✅ Recognized: ${label}`);
         }
       });
     } else {
@@ -79,10 +148,11 @@ export default function MainScreen() {
 
     return () => {
       closeSocket();
+      if (autoClearTimerRef.current) clearTimeout(autoClearTimerRef.current);
     };
   }, [activeTab]);
 
-  // STT websocket effect
+  // ── STT websocket effect (KEEP EXACT PI HARDWARE FLOW) ───────────────────
   useEffect(() => {
     if (activeTab !== "speech") {
       closeSttSocket();
@@ -113,32 +183,26 @@ export default function MainScreen() {
     });
 
     return () => {
-      // only close when leaving speech tab/unmounting this effect
       if (activeTab !== "speech") {
         closeSttSocket();
       }
     };
   }, [activeTab]);
 
-const handleSpeechToggle = () => {
-  if (isSpeechListening) {
-    stopSttListening();
-    setIsRecording(false);
-    // wait for transcript/error before setting isSpeechListening false
-  } else {
-    setSttText("Listening...");
-    setIsSpeechListening(true);
-    startSttListening();
-  }
-};
+  // ── KEEP EXACT PI SPEECH TOGGLE FLOW ──────────────────────────────────────
+  const handleSpeechToggle = () => {
+    if (isSpeechListening) {
+      stopSttListening();
+      setIsRecording(false);
+      // wait for transcript/error before setting isSpeechListening false
+    } else {
+      setSttText("Listening...");
+      setIsSpeechListening(true);
+      startSttListening();
+    }
+  };
 
-  const signBoxText =
-    typedText.length > 0
-      ? typedText
-      : finalWord.length > 0
-      ? finalWord
-      : "Waiting for sign...";
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <View style={styles.mainWrapper}>
@@ -184,10 +248,66 @@ const handleSpeechToggle = () => {
               </View>
 
               <View style={styles.translationPanel}>
-                <Text style={styles.translationLabel}>FSL TRANSLATION</Text>
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <Text style={styles.translationText}>{signBoxText}</Text>
-                </ScrollView>
+                <View style={styles.statusBar}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      signStatus.startsWith("✅")
+                        ? styles.dotGreen
+                        : signStatus.startsWith("✋")
+                          ? styles.dotYellow
+                          : signStatus.startsWith("💬")
+                            ? styles.dotBlue
+                            : signStatus.startsWith("👋")
+                              ? styles.dotYellow
+                              : styles.dotGray,
+                    ]}
+                  />
+                  <Text style={styles.statusText} numberOfLines={1}>
+                    {signStatus}
+                  </Text>
+                </View>
+
+                {signedWords.length > 0 && (
+                  <Animated.View
+                    style={[styles.signedSection, { opacity: chipsFade }]}
+                  >
+                    <Text style={styles.sectionLabel}>SIGNS DETECTED</Text>
+                    <View style={styles.chipRow}>
+                      {signedWords.map((w, i) => (
+                        <View key={`${w}-${i}`} style={styles.chip}>
+                          <Text style={styles.chipText}>{w}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </Animated.View>
+                )}
+
+                {signedWords.length > 0 && <View style={styles.divider} />}
+
+                <View style={styles.sentenceBlock}>
+                  <Text style={styles.translationLabel}>FSL TRANSLATION</Text>
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    {finalSentence ? (
+                      <Animated.View
+                        style={{
+                          opacity: Animated.multiply(sentenceFade, sentenceOut),
+                          transform: [{ translateY: sentenceSlide }],
+                        }}
+                      >
+                        <Text style={styles.translationText}>
+                          {finalSentence}
+                        </Text>
+                      </Animated.View>
+                    ) : (
+                      <Text style={styles.placeholderText}>
+                        {signedWords.length > 0
+                          ? "Keep signing..."
+                          : "Waiting for sign..."}
+                      </Text>
+                    )}
+                  </ScrollView>
+                </View>
               </View>
             </View>
           ) : (
@@ -201,7 +321,9 @@ const handleSpeechToggle = () => {
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      isSpeechListening ? styles.stopButton : styles.startButton,
+                      isSpeechListening
+                        ? styles.stopButton
+                        : styles.startButton,
                     ]}
                     onPress={handleSpeechToggle}
                   >
@@ -235,6 +357,9 @@ const THEME = {
   border: "#E0DDD9",
   success: "#4CAF50",
   danger: "#C85A54",
+  yellow: "#E6A817",
+  blue: "#3B7DD8",
+  panelAlt: "#EAE6E2",
 };
 
 const styles = StyleSheet.create({
@@ -252,10 +377,9 @@ const styles = StyleSheet.create({
 
   header: {
     position: "absolute",
-    left: 0,
+    left: 20,
     top: 18,
     zIndex: 10,
-    paddingHorizontal: 20,
   },
 
   brandText: {
@@ -263,7 +387,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: THEME.primary,
     letterSpacing: 1,
-    textTransform: "uppercase",
   },
 
   tabContainer: {
@@ -328,6 +451,122 @@ const styles = StyleSheet.create({
     maxHeight: "100%",
   },
 
+  statusBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    gap: 6,
+  },
+
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+
+  dotGreen: {
+    backgroundColor: THEME.success,
+  },
+
+  dotYellow: {
+    backgroundColor: THEME.yellow,
+  },
+
+  dotBlue: {
+    backgroundColor: THEME.blue,
+  },
+
+  dotGray: {
+    backgroundColor: "#ccc",
+  },
+
+  statusText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: THEME.muted,
+    flex: 1,
+  },
+
+  signedSection: {
+    marginBottom: 4,
+  },
+
+  sectionLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: THEME.muted,
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginBottom: 5,
+  },
+
+  chip: {
+    backgroundColor: THEME.primary + "15",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: THEME.primary + "30",
+  },
+
+  chipText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.primary,
+  },
+
+  pauseHint: {
+    fontSize: 9,
+    color: "#bbb",
+    fontStyle: "italic",
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: THEME.border,
+    marginVertical: 10,
+  },
+
+  sentenceBlock: {
+    flex: 1,
+  },
+
+  translationLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: THEME.primary,
+    marginBottom: 6,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+
+  translationText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: THEME.text,
+    lineHeight: 26,
+  },
+
+  placeholderText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#bbb",
+    fontStyle: "italic",
+    lineHeight: 20,
+  },
+
   speechLayout: {
     flex: 1,
     gap: 12,
@@ -382,21 +621,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.border,
     padding: 24,
-  },
-
-  translationLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: THEME.primary,
-    marginBottom: 6,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-
-  translationText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: THEME.text,
-    lineHeight: 30,
   },
 });
