@@ -109,21 +109,17 @@ export default function MainScreen() {
     };
   }, [activeTab, isSpeechListening]);
 
- const handleSpeechToggle = async () => {
-    if (isSpeechListening) {
-      stopSttListening();
-      setIsSpeechListening(false);
-      setIsRecording(false);
-    } else {
-      setSttText("Listening...");
-      setIsSpeechListening(true);
-
-      // ensure socket is connected before sending start
-      setTimeout(() => {
-        startSttListening();
-      }, 300);
-    }
-  };
+const handleSpeechToggle = async () => {
+  if (isSpeechListening) {
+    stopSttListening();
+    setIsSpeechListening(false);
+    setIsRecording(false);
+  } else {
+    setSttText("Listening...");
+    setIsSpeechListening(true);
+    startSttListening();
+  }
+};
 
   const signBoxText =
     typedText.length > 0
