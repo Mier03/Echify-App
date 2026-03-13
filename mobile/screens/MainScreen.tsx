@@ -101,11 +101,14 @@ export default function MainScreen() {
       if (data?.type === "transcript") {
         const text = (data.text || "").trim();
         setSttText(text || "…");
+        setIsSpeechListening(false);
+        setIsRecording(false);
       }
 
       if (data?.type === "error") {
         setSttText(data.message || "STT error.");
         setIsRecording(false);
+        setIsSpeechListening(false);
       }
     });
 
@@ -117,17 +120,17 @@ export default function MainScreen() {
     };
   }, [activeTab]);
 
-  const handleSpeechToggle = () => {
-    if (isSpeechListening) {
-      stopSttListening();
-      setIsSpeechListening(false);
-      setIsRecording(false);
-    } else {
-      setSttText("Listening...");
-      setIsSpeechListening(true);
-      startSttListening();
-    }
-  };
+const handleSpeechToggle = () => {
+  if (isSpeechListening) {
+    stopSttListening();
+    setIsRecording(false);
+    // wait for transcript/error before setting isSpeechListening false
+  } else {
+    setSttText("Listening...");
+    setIsSpeechListening(true);
+    startSttListening();
+  }
+};
 
   const signBoxText =
     typedText.length > 0

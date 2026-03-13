@@ -55,8 +55,9 @@ def transcribe_samples(samples: np.ndarray) -> str:
         segments, _ = model.transcribe(
             tmp_path,
             language="en",
-            vad_filter=True,
+            vad_filter=False,
             condition_on_previous_text=False,
+            beam_size=5,
         )
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return text
@@ -114,10 +115,16 @@ async def stt_live_endpoint(websocket: WebSocket):
                     else np.array([], dtype=np.float32)
                 )
 
+                print(f"🧪 Recorded chunks: {len(recorded_chunks)}")
+                print(f"🧪 Audio samples: {len(audio)}")
+                if len(audio) > 0:
+                    print(f"🧪 Audio max amplitude: {float(np.max(np.abs(audio)))}")
+
                 text = ""
                 if len(audio) > 0:
                     try:
                         text = transcribe_samples(audio)
+                        print(f"🧪 Transcript text: {text}")
                     except Exception as e:
                         print(f"❌ STT transcription error: {e}")
                         await websocket.send_json({
@@ -176,5 +183,5 @@ async def stt_live_endpoint(websocket: WebSocket):
         stop_event.set()
         for task in (receiver_task, sender_task):
             task.cancel()
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
