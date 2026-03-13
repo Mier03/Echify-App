@@ -34,16 +34,15 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Resize for Pi performance
       const targetWidth = 320;
       const targetHeight = 240;
 
       canvas.width = targetWidth;
       canvas.height = targetHeight;
 
-      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
       try {
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
         const frameBase64 = canvas.toDataURL("image/jpeg", 0.6);
 
         sentPreviewCountRef.current += 1;
@@ -70,7 +69,6 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
       }
     };
 
-    // About 8 FPS for Raspberry Pi
     frameTimerRef.current = setInterval(sendCurrentFrame, 120);
 
     return () => {
@@ -102,6 +100,7 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
           <img
             ref={imgRef}
             src={previewUrl}
+            crossOrigin="anonymous"
             alt="Camera Preview"
             style={styles.previewImage as any}
             onLoad={() => {
