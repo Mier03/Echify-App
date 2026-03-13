@@ -40,7 +40,7 @@ from src.gesture.fsl_dynamic_inference import (
     get_model_info,
 )
 from src.tts.tts_engine import speak
-from session_logger import SessionLogger
+# from session_logger import SessionLogger
 
 router = APIRouter()
 
@@ -82,12 +82,12 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
         await websocket.close()
         return
 
-    # ── Start session logger ───────────────────────────────────────────────
-    logger = SessionLogger(
-        session_label=f"Dynamic_FSL_{session_ts}_{websocket.client.host}",
-        log_dir=str(_BACKEND_ROOT / "logs")
-    )
-    logger.start_session()
+    # ── Start session logger Uncomment Later ───────────────────────────────────────────────
+    # logger = SessionLogger(
+    #     session_label=f"Dynamic_FSL_{session_ts}_{websocket.client.host}",
+    #     log_dir=str(_BACKEND_ROOT / "logs")
+    # )
+    # logger.start_session()
 
     # ── Per-session state ──────────────────────────────────────────────────
     builder = SentenceBuilder()
@@ -208,18 +208,19 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                     gesture_intervals.append((now_ts - last_gesture_time) * 1000)
                 last_gesture_time = now_ts
 
-                logger.log_gesture(
-                    predicted_label=label,
-                    confidence=conf,
-                    frames_collected=frames_in_seg,
-                    inference_time_ms=inference_ms,
-                    ground_truth=None,
-                    notes=(
-                        f"server_frame_pending|"
-                        f"frame_no={frame_count}|"
-                        f"client={client_id}"
-                    )
-                )
+                #Uncomment later
+                # logger.log_gesture(
+                #     predicted_label=label,
+                #     confidence=conf,
+                #     frames_collected=frames_in_seg,
+                #     inference_time_ms=inference_ms,
+                #     ground_truth=None,
+                #     notes=(
+                #         f"server_frame_pending|"
+                #         f"frame_no={frame_count}|"
+                #         f"client={client_id}"
+                #     )
+                # )
 
                 # add_token may finalize immediately if max tokens reached
                 token_result = builder.add_token(label)
@@ -242,11 +243,12 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
 
                 try:
                     speak(english)
-                    logger.log_tts(
-                        text=english,
-                        tts_latency_ms=inference_ms,
-                        notes=f"sentence_raw={raw}|frame_no={frame_count}"
-                    )
+                    #Uncomment Later
+                    # logger.log_tts(
+                    #     text=english,
+                    #     tts_latency_ms=inference_ms,
+                    #     notes=f"sentence_raw={raw}|frame_no={frame_count}"
+                    # )
                 except Exception as e:
                     print(f"❌ TTS error: {e}")
 
@@ -288,7 +290,7 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
         # ── Cleanup/reset ──────────────────────────────────────────────────
         reset_buffer()
         builder.reset()
-        logger.end_session()
+        # logger.end_session() Uncomment Later
 
         if frame_latencies_ms:
             avg_inf = sum(inference_latencies) / len(inference_latencies) if inference_latencies else 0.0
