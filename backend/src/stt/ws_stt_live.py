@@ -1,5 +1,6 @@
 #ws_stt_live.py
 import asyncio
+import contextlib
 import json
 import os
 import tempfile
@@ -28,7 +29,6 @@ def get_model():
 
 
 def downsample_48k_to_16k(samples: np.ndarray) -> np.ndarray:
-    # Simple 3x downsample: 48000 -> 16000
     return samples[::3].copy()
 
 
@@ -82,98 +82,99 @@ async def stt_live_endpoint(websocket: WebSocket):
 
     is_listening = False
     recorded_chunks = []
+    stop_event = asyncio.Event()
 
     async def receiver():
         nonlocal is_listening, recorded_chunks
 
-        try:
-            while True:
-                raw = await websocket.receive_text()
-                data = json.loads(raw)
+        while not stop_event.is_set():
+            raw = await websocket.receive_text()
+            data = json.loads(raw)
 
-                action = data.get("action")
+            action = data.get("action")
 
-                if action == "start":
-                    print("🎙 STT start received")
-                    is_listening = True
-                    recorded_chunks = []
+            if action == "start":
+                print("🎙 STT start received")
+                is_listening = True
+                recorded_chunks = []
+                shared_mic.drain_chunks()
 
-                    # clear old chunks
-                    shared_mic.drain_chunks()
+                await websocket.send_json({
+                    "type": "status",
+                    "message": "Listening started"
+                })
 
-                    await websocket.send_json({
-                        "type": "status",
-                        "message": "Listening started"
-                    })
+            elif action == "stop":
+                print("🛑 STT stop received")
+                is_listening = False
 
-                elif action == "stop":
-                    print("🛑 STT stop received")
-                    is_listening = False
+                audio = (
+                    np.concatenate(recorded_chunks)
+                    if recorded_chunks
+                    else np.array([], dtype=np.float32)
+                )
 
-                    audio = (
-                        np.concatenate(recorded_chunks)
-                        if recorded_chunks
-                        else np.array([], dtype=np.float32)
-                    )
+                text = ""
+                if len(audio) > 0:
+                    try:
+                        text = transcribe_samples(audio)
+                    except Exception as e:
+                        print(f"❌ STT transcription error: {e}")
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"STT transcription error: {str(e)}"
+                        })
+                        continue
 
-                    text = ""
-                    if len(audio) > 0:
-                        try:
-                            text = transcribe_samples(audio)
-                        except Exception as e:
-                            print(f"❌ STT transcription error: {e}")
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": f"STT transcription error: {str(e)}"
-                            })
-                            continue
-
-                    await websocket.send_json({
-                        "type": "transcript",
-                        "text": text if text else "…",
-                    })
-
-        except WebSocketDisconnect:
-            raise
-        except Exception as e:
-            print(f"❌ STT receiver error: {e}")
-            raise
+                await websocket.send_json({
+                    "type": "transcript",
+                    "text": text if text else "…",
+                })
 
     async def sender():
         nonlocal is_listening, recorded_chunks
 
-        try:
-            while True:
-                level = shared_mic.get_level()
-                chunks = shared_mic.drain_chunks()
+        while not stop_event.is_set():
+            level = shared_mic.get_level()
+            chunks = shared_mic.drain_chunks()
 
-                if is_listening and chunks:
-                    recorded_chunks.extend(chunks)
+            if is_listening and chunks:
+                recorded_chunks.extend(chunks)
 
-                await websocket.send_json({
-                    "type": "level",
-                    "level": level,
-                    "isRecording": is_listening,
-                })
+            await websocket.send_json({
+                "type": "level",
+                "level": level,
+                "isRecording": is_listening,
+            })
 
-                await asyncio.sleep(0.1)
+            await asyncio.sleep(0.1)
 
-        except WebSocketDisconnect:
-            raise
-        except Exception as e:
-            print(f"❌ STT sender error: {e}")
-            raise
+    receiver_task = asyncio.create_task(receiver())
+    sender_task = asyncio.create_task(sender())
 
     try:
-        await asyncio.gather(receiver(), sender())
+        done, pending = await asyncio.wait(
+            [receiver_task, sender_task],
+            return_when=asyncio.FIRST_EXCEPTION,
+        )
+
+        for task in done:
+            exc = task.exception()
+            if exc:
+                raise exc
+
     except WebSocketDisconnect:
         print("🔌 Client disconnected from /ws/stt-live")
     except Exception as e:
         print(f"❌ STT websocket error: {e}")
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({
                 "type": "error",
                 "message": str(e),
             })
-        except Exception:
-            pass
+    finally:
+        stop_event.set()
+        for task in (receiver_task, sender_task):
+            task.cancel()
+            with contextlib.suppress(Exception):
+                await task

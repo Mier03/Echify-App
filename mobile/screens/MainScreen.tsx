@@ -28,6 +28,7 @@ export default function MainScreen() {
   const [sttText, setSttText] = useState("Say something...");
   const [isSpeechListening, setIsSpeechListening] = useState(false);
 
+  // Sign websocket effect
   useEffect(() => {
     if (activeTab === "sign") {
       connectSocket((data) => {
@@ -72,54 +73,61 @@ export default function MainScreen() {
           newWordStartedRef.current = false;
         }
       });
-
-      closeSttSocket();
-      setIsRecording(false);
-      setIsSpeechListening(false);
     } else {
       closeSocket();
-
-      if (isSpeechListening) {
-        connectSttSocket((data) => {
-          console.log("🎤 STT message:", data);
-
-          if (data?.type === "level") {
-            setIsRecording(!!data.isRecording);
-          }
-
-          if (data?.type === "transcript") {
-            const text = (data.text || "").trim();
-            setSttText(text || "…");
-          }
-
-          if (data?.type === "error") {
-            setSttText(data.message || "STT error.");
-            setIsRecording(false);
-          }
-        });
-      } else {
-        closeSttSocket();
-        setIsRecording(false);
-      }
     }
 
     return () => {
       closeSocket();
-      closeSttSocket();
     };
-  }, [activeTab, isSpeechListening]);
+  }, [activeTab]);
 
-const handleSpeechToggle = async () => {
-  if (isSpeechListening) {
-    stopSttListening();
-    setIsSpeechListening(false);
-    setIsRecording(false);
-  } else {
-    setSttText("Listening...");
-    setIsSpeechListening(true);
-    startSttListening();
-  }
-};
+  // STT websocket effect
+  useEffect(() => {
+    if (activeTab !== "speech") {
+      closeSttSocket();
+      setIsRecording(false);
+      setIsSpeechListening(false);
+      return;
+    }
+
+    connectSttSocket((data) => {
+      console.log("🎤 STT message:", data);
+
+      if (data?.type === "level") {
+        setIsRecording(!!data.isRecording);
+      }
+
+      if (data?.type === "transcript") {
+        const text = (data.text || "").trim();
+        setSttText(text || "…");
+      }
+
+      if (data?.type === "error") {
+        setSttText(data.message || "STT error.");
+        setIsRecording(false);
+      }
+    });
+
+    return () => {
+      // only close when leaving speech tab/unmounting this effect
+      if (activeTab !== "speech") {
+        closeSttSocket();
+      }
+    };
+  }, [activeTab]);
+
+  const handleSpeechToggle = () => {
+    if (isSpeechListening) {
+      stopSttListening();
+      setIsSpeechListening(false);
+      setIsRecording(false);
+    } else {
+      setSttText("Listening...");
+      setIsSpeechListening(true);
+      startSttListening();
+    }
+  };
 
   const signBoxText =
     typedText.length > 0
