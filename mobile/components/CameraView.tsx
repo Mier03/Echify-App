@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { sendFrame } from "../services/socket";
 
 interface CameraViewProps {
   onPrediction?: (prediction: string) => void;
@@ -9,11 +10,56 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const previewUrl = useMemo(() => {
     const host =
       typeof window !== "undefined" ? window.location.hostname : "localhost";
     return `http://${host}:8000/preview`;
   }, []);
+
+  useEffect(() => {
+    if (!previewLoaded) return;
+
+    const sendCurrentFrame = () => {
+      const img = imgRef.current;
+      const canvas = canvasRef.current;
+
+      if (!img || !canvas) return;
+      if (!img.naturalWidth || !img.naturalHeight) return;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Resize down a bit for speed on Pi
+      const targetWidth = 320;
+      const targetHeight = 240;
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+      try {
+        const frameBase64 = canvas.toDataURL("image/jpeg", 0.6);
+        sendFrame(frameBase64);
+      } catch (e) {
+        console.log("❌ Failed to capture/send frame:", e);
+      }
+    };
+
+    // about 8 FPS, safer for Pi
+    frameTimerRef.current = setInterval(sendCurrentFrame, 120);
+
+    return () => {
+      if (frameTimerRef.current) {
+        clearInterval(frameTimerRef.current);
+        frameTimerRef.current = null;
+      }
+    };
+  }, [previewLoaded]);
 
   return (
     <View style={styles.container}>
@@ -32,19 +78,23 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
           </Text>
         </View>
       ) : (
-        <img
-          src={previewUrl}
-          alt="Camera Preview"
-          style={styles.previewImage as any}
-          onLoad={() => {
-            setPreviewLoaded(true);
-            setCameraError("");
-          }}
-          onError={() => {
-            setPreviewLoaded(false);
-            setCameraError("Preview unavailable");
-          }}
-        />
+        <>
+          <img
+            ref={imgRef}
+            src={previewUrl}
+            alt="Camera Preview"
+            style={styles.previewImage as any}
+            onLoad={() => {
+              setPreviewLoaded(true);
+              setCameraError("");
+            }}
+            onError={() => {
+              setPreviewLoaded(false);
+              setCameraError("Preview unavailable");
+            }}
+          />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
+        </>
       )}
 
       <View style={styles.statusIndicator}>

@@ -127,6 +127,9 @@ def initialize_dynamic_model():
     global collecting, gesture_frames, consec_hand, consec_nohand, last_prediction_time
     global _frame_counter, _last_frame_feats, _last_hands_detected
 
+    if model is not None and hands is not None:
+        return
+
     print("=" * 60)
     print("🚀 Initializing FSL Dynamic Recognition System")
     print("=" * 60)
