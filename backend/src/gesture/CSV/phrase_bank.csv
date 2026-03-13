@@ -1,0 +1,465 @@
+phrase,english
+AFTERNOON,Good afternoon!
+AFTERNOON FAMILY,"Afternoon, family."
+AFTERNOON FRIEND,"Afternoon, friend."
+AFTERNOON GOODBYE,Afternoon Goodbye.
+AFTERNOON HELLO,Good afternoon!
+AFTERNOON I,"Afternoon, i."
+AFTERNOON ME,"Afternoon, me."
+AFTERNOON MORNING,Afternoon Morning.
+AFTERNOON PLEASE,Afternoon Please.
+AFTERNOON SORRY,Afternoon Sorry.
+AFTERNOON THANKS,Afternoon Thanks.
+AFTERNOON YOU,"Afternoon, you."
+BAD,Bad.
+BAD EAT,"Bad, eat."
+BAD FAMILY,Bad Family.
+BAD FRIEND,Bad Friend.
+BAD GO,"Bad, go."
+BAD GOOD,Bad or good?
+BAD HELP,"Bad, help."
+BAD I,Bad I.
+BAD KNOW,"Bad, know."
+BAD ME,Bad Me.
+BAD NO,Bad No.
+BAD OKAY,Bad Okay.
+BAD SLEEP,"Bad, sleep."
+BAD UNDERSTAND,"Bad, understand."
+BAD WANT,"Bad, want."
+BAD YES,Bad Yes.
+BAD YOU,Bad You.
+EAT,Eat.
+EAT FAMILY,Eat Family.
+EAT FRIEND,Eat Friend.
+EAT FROM,Eat From.
+EAT HERE,Eat Here.
+EAT HOME,Eat Home.
+EAT I,Eat I.
+EAT ME,Eat Me.
+EAT TODAY,Eat Today.
+EAT YOU,Eat You.
+FAMILY,Family.
+FAMILY EAT,Family Eat.
+FAMILY FRIEND,Family Friend.
+FAMILY FROM,Family From.
+FAMILY GO,Family Go.
+FAMILY HELP,Family Help.
+FAMILY HERE,Family is here.
+FAMILY HOME,Family is home.
+FAMILY I,Family I.
+FAMILY KNOW,Family Know.
+FAMILY ME,Family Me.
+FAMILY SLEEP,Family Sleep.
+FAMILY TODAY,Family Today.
+FAMILY UNDERSTAND,Family Understand.
+FAMILY WANT,Family Want.
+FAMILY YOU,Family You.
+FRIEND,Friend.
+FRIEND EAT,Friend Eat.
+FRIEND FAMILY,Friend Family.
+FRIEND FROM,Friend From.
+FRIEND GO,Friend Go.
+FRIEND HELP,Friend Help.
+FRIEND HERE,Friend is here.
+FRIEND HOME,Friend is home.
+FRIEND I,Friend I.
+FRIEND KNOW,Friend Know.
+FRIEND ME,Friend Me.
+FRIEND SLEEP,Friend Sleep.
+FRIEND TODAY,Friend Today.
+FRIEND UNDERSTAND,Friend Understand.
+FRIEND WANT,Friend Want.
+FRIEND YOU,Friend You.
+FROM,From.
+FROM FAMILY,From Family.
+FROM FRIEND,From Friend.
+FROM HERE,From Here.
+FROM HOME,From home.
+FROM I,From I.
+FROM ME,From Me.
+FROM YOU,From You.
+GO,Go.
+GO FAMILY,Go Family.
+GO FRIEND,Go Friend.
+GO FROM,Go From.
+GO HERE,Go Here.
+GO HOME,Go Home.
+GO I,Go I.
+GO ME,Go Me.
+GO TODAY,Go Today.
+GO YOU,Go You.
+GOOD,Good.
+GOOD BAD,Good or bad?
+GOOD EAT,"Good, eat."
+GOOD FAMILY,Good Family.
+GOOD FRIEND,Good Friend.
+GOOD GO,"Good, go."
+GOOD HELP,"Good, help."
+GOOD I,Good I.
+GOOD KNOW,"Good, know."
+GOOD ME,Good Me.
+GOOD NO,Good No.
+GOOD OKAY,Good Okay.
+GOOD SLEEP,"Good, sleep."
+GOOD UNDERSTAND,"Good, understand."
+GOOD WANT,"Good, want."
+GOOD YES,Good Yes.
+GOOD YOU,Good You.
+GOODBYE,Goodbye!
+GOODBYE AFTERNOON,Goodbye Afternoon.
+GOODBYE FAMILY,"Goodbye, family."
+GOODBYE FRIEND,"Goodbye, friend."
+GOODBYE HELLO,Goodbye Hello.
+GOODBYE I,"Goodbye, i."
+GOODBYE ME,"Goodbye, me."
+GOODBYE MORNING,Goodbye Morning.
+GOODBYE PLEASE,Goodbye Please.
+GOODBYE SORRY,Goodbye Sorry.
+GOODBYE THANKS,"Goodbye, thank you."
+GOODBYE YOU,"Goodbye, you."
+HELLO,Hello!
+HELLO AFTERNOON,Hello Afternoon.
+HELLO FAMILY,"Hello, family."
+HELLO FRIEND,"Hello, friend."
+HELLO GOODBYE,Hello and goodbye.
+HELLO I,"Hello, i."
+HELLO ME,"Hello, me."
+HELLO MORNING,Hello Morning.
+HELLO PLEASE,Hello Please.
+HELLO SORRY,Hello Sorry.
+HELLO THANKS,"Hello, thank you."
+HELLO YOU,"Hello, you."
+HELP,Help!
+HELP FAMILY,Help Family.
+HELP FRIEND,Help Friend.
+HELP FROM,Help From.
+HELP HERE,Help Here.
+HELP HOME,Help Home.
+HELP I,Help me!
+HELP ME,Help me!
+HELP TODAY,Help Today.
+HELP YOU,Help You.
+HERE,Here.
+HERE FAMILY,Here Family.
+HERE FRIEND,Here Friend.
+HERE FROM,Here From.
+HERE HOME,Home is here.
+HERE I,Here I.
+HERE ME,Here Me.
+HERE YOU,Here You.
+HOME,Home.
+HOME FAMILY,Home Family.
+HOME FRIEND,Home Friend.
+HOME FROM,Home From.
+HOME HERE,Home is here.
+HOME I,Home I.
+HOME ME,Home Me.
+HOME YOU,Home You.
+HOW,How?
+HOW EAT,How eat?
+HOW FAMILY,How is your family?
+HOW FRIEND,How is your friend?
+HOW FROM,How from?
+HOW GO,How go?
+HOW HELP,How help?
+HOW HERE,How here?
+HOW HOME,How home?
+HOW I,How am I?
+HOW KNOW,How know?
+HOW ME,How me?
+HOW SLEEP,How sleep?
+HOW UNDERSTAND,How understand?
+HOW WANT,How want?
+HOW YOU,How are you?
+I,I.
+I EAT,I eat.
+I FAMILY,My family.
+I FRIEND,My friend.
+I FROM,I'm from here.
+I GO,I go.
+I GO HERE,I'm coming here.
+I GO HOME,I'm going home.
+I HELP,I help.
+I HELP YOU,I will help you.
+I HERE,I'm here.
+I HOME,I'm home.
+I KNOW,I know.
+I ME,I Me.
+I SLEEP,I sleep.
+I TODAY,I Today.
+I UNDERSTAND,I understand.
+I WANT,I want.
+I WANT EAT,I want to eat.
+I WANT GO,I want to go.
+I WANT GO HOME,I want to go home.
+I WANT HELP,I need help.
+I WANT HOME,I want to go home.
+I WANT SLEEP,I want to sleep.
+I YOU,I You.
+KNOW,Know.
+KNOW FAMILY,Know Family.
+KNOW FRIEND,Know Friend.
+KNOW FROM,Know From.
+KNOW HERE,Know Here.
+KNOW HOME,Know Home.
+KNOW I,Know I.
+KNOW ME,Know Me.
+KNOW TODAY,Know Today.
+KNOW YOU,Know You.
+ME,Me.
+ME EAT,I eat.
+ME FAMILY,Me Family.
+ME FRIEND,Me Friend.
+ME FROM,I am from.
+ME GO,I go.
+ME GO HOME,I'm going home.
+ME HELP,I need help.
+ME HERE,I am here.
+ME HOME,I am home.
+ME I,Me I.
+ME KNOW,I know.
+ME SLEEP,I sleep.
+ME TODAY,Me Today.
+ME UNDERSTAND,I understand.
+ME WANT,I want.
+ME YOU,Me You.
+MORNING,Good morning!
+MORNING AFTERNOON,Morning Afternoon.
+MORNING FAMILY,"Morning, family."
+MORNING FRIEND,"Morning, friend."
+MORNING GOODBYE,Morning Goodbye.
+MORNING HELLO,Good morning!
+MORNING I,"Morning, i."
+MORNING ME,"Morning, me."
+MORNING PLEASE,Morning Please.
+MORNING SORRY,Morning Sorry.
+MORNING THANKS,Morning Thanks.
+MORNING YOU,"Morning, you."
+NO,No.
+NO BAD,"No, bad."
+NO EAT,"No, eat."
+NO FAMILY,No Family.
+NO FRIEND,No Friend.
+NO GO,"No, go."
+NO GOOD,No Good.
+NO HELP,"No, help."
+NO I,No I.
+NO KNOW,"No, I don't know."
+NO ME,No Me.
+NO OKAY,No Okay.
+NO SLEEP,"No, sleep."
+NO UNDERSTAND,"No, I don't understand."
+NO WANT,"No, want."
+NO YES,Yes or no?
+NO YOU,No You.
+OKAY,Okay.
+OKAY BAD,Okay Bad.
+OKAY EAT,"Okay, eat."
+OKAY FAMILY,Okay Family.
+OKAY FRIEND,Okay Friend.
+OKAY GO,"Okay, go."
+OKAY GOOD,"Okay, good."
+OKAY HELP,"Okay, help."
+OKAY I,Okay I.
+OKAY KNOW,"Okay, know."
+OKAY ME,Okay Me.
+OKAY NO,Okay No.
+OKAY SLEEP,"Okay, sleep."
+OKAY UNDERSTAND,"Okay, understand."
+OKAY WANT,"Okay, want."
+OKAY YES,Okay Yes.
+OKAY YOU,Okay You.
+PLEASE,Please.
+PLEASE AFTERNOON,Please Afternoon.
+PLEASE FAMILY,"Please, family."
+PLEASE FRIEND,"Please, friend."
+PLEASE GO HOME,Please Go Home.
+PLEASE GOODBYE,Please Goodbye.
+PLEASE HELLO,Please Hello.
+PLEASE I,"Please, i."
+PLEASE ME,"Please, me."
+PLEASE MORNING,Please Morning.
+PLEASE SORRY,Please Sorry.
+PLEASE THANKS,Please Thanks.
+PLEASE YOU,"Please, you."
+SLEEP,Sleep.
+SLEEP FAMILY,Sleep Family.
+SLEEP FRIEND,Sleep Friend.
+SLEEP FROM,Sleep From.
+SLEEP HERE,Sleep Here.
+SLEEP HOME,Sleep Home.
+SLEEP I,Sleep I.
+SLEEP ME,Sleep Me.
+SLEEP TODAY,Sleep Today.
+SLEEP YOU,Sleep You.
+SORRY,Sorry.
+SORRY AFTERNOON,Sorry Afternoon.
+SORRY FAMILY,"Sorry, family."
+SORRY FRIEND,"Sorry, friend."
+SORRY GOODBYE,Sorry Goodbye.
+SORRY HELLO,Sorry Hello.
+SORRY I,"Sorry, i."
+SORRY ME,"Sorry, me."
+SORRY MORNING,Sorry Morning.
+SORRY PLEASE,"Sorry, please."
+SORRY THANKS,Sorry Thanks.
+SORRY YOU,"Sorry, you."
+THANKS,Thank you.
+THANKS AFTERNOON,Thanks Afternoon.
+THANKS FAMILY,"Thank you, family."
+THANKS FRIEND,"Thank you, friend."
+THANKS GOODBYE,Thanks Goodbye.
+THANKS HELLO,Thanks Hello.
+THANKS I,"Thanks, i."
+THANKS ME,"Thanks, me."
+THANKS MORNING,Thanks Morning.
+THANKS PLEASE,"Thank you, please."
+THANKS SORRY,Thanks Sorry.
+THANKS YOU,"Thanks, you."
+TODAY,Today.
+TODAY EAT,Eat today.
+TODAY FROM,From today.
+TODAY GO,Go today.
+TODAY HELP,Help today.
+TODAY HERE,Here today.
+TODAY HOME,Home today.
+TODAY I EAT,I eat today.
+TODAY I GO,I go today.
+TODAY KNOW,Know today.
+TODAY SLEEP,Sleep today.
+TODAY UNDERSTAND,Understand today.
+TODAY WANT,Want today.
+TODAY YOU GO,You go today.
+UNDERSTAND,Understand.
+UNDERSTAND FAMILY,Understand Family.
+UNDERSTAND FRIEND,Understand Friend.
+UNDERSTAND FROM,Understand From.
+UNDERSTAND HERE,Understand Here.
+UNDERSTAND HOME,Understand Home.
+UNDERSTAND I,Understand I.
+UNDERSTAND ME,Understand Me.
+UNDERSTAND TODAY,Understand Today.
+UNDERSTAND YOU,Understand You.
+WANT,Want.
+WANT FAMILY,Want Family.
+WANT FRIEND,Want Friend.
+WANT FROM,Want From.
+WANT HERE,Want Here.
+WANT HOME,Want Home.
+WANT I,Want I.
+WANT ME,Want Me.
+WANT TODAY,Want Today.
+WANT YOU,Want You.
+WHAT,What?
+WHAT EAT,What to eat?
+WHAT FAMILY,What family?
+WHAT FRIEND,What friend?
+WHAT FROM,What from?
+WHAT GO,What is going on?
+WHAT HELP,What help?
+WHAT HERE,What here?
+WHAT HOME,What home?
+WHAT I,What i?
+WHAT KNOW,What know?
+WHAT ME,What me?
+WHAT SLEEP,What sleep?
+WHAT UNDERSTAND,What understand?
+WHAT WANT,What do you want?
+WHAT YOU,What you?
+WHAT YOU EAT,What do you eat?
+WHAT YOU WANT,What do you want?
+WHERE,Where?
+WHERE EAT,Where eat?
+WHERE FAMILY,Where is your family?
+WHERE FRIEND,Where is your friend?
+WHERE FROM,Where from?
+WHERE GO,Where go?
+WHERE HELP,Where help?
+WHERE HERE,Where is here?
+WHERE HOME,Where is home?
+WHERE I,Where i?
+WHERE KNOW,Where know?
+WHERE ME,Where me?
+WHERE SLEEP,Where sleep?
+WHERE UNDERSTAND,Where understand?
+WHERE WANT,Where want?
+WHERE YOU,Where are you?
+WHERE YOU FROM,Where are you from?
+WHERE YOU GO,Where are you going?
+WHERE YOU HOME,Where You Home.
+WHO,Who?
+WHO EAT,Who eat?
+WHO FAMILY,Who is your family?
+WHO FRIEND,Who is your friend?
+WHO FROM,Who from?
+WHO GO,Who go?
+WHO HELP,Who help?
+WHO HERE,Who here?
+WHO HOME,Who home?
+WHO I,Who i?
+WHO KNOW,Who know?
+WHO ME,Who me?
+WHO SLEEP,Who sleep?
+WHO UNDERSTAND,Who understand?
+WHO WANT,Who want?
+WHO YOU,Who are you?
+WHY,Why?
+WHY EAT,Why eat?
+WHY FAMILY,Why family?
+WHY FRIEND,Why friend?
+WHY FROM,Why from?
+WHY GO,Why go?
+WHY HELP,Why help?
+WHY HERE,Why here?
+WHY HOME,Why home?
+WHY I,Why i?
+WHY KNOW,Why know?
+WHY ME,Why me?
+WHY SLEEP,Why sleep?
+WHY UNDERSTAND,Why understand?
+WHY WANT,Why want?
+WHY YOU,Why you?
+WHY YOU GO,Why are you going?
+WHY YOU HERE,Why are you here?
+YES,Yes.
+YES BAD,Yes Bad.
+YES EAT,"Yes, eat."
+YES FAMILY,Yes Family.
+YES FRIEND,Yes Friend.
+YES GO,"Yes, go."
+YES GOOD,"Yes, good."
+YES HELP,"Yes, help."
+YES I,Yes I.
+YES KNOW,"Yes, I know."
+YES ME,Yes Me.
+YES NO,Yes or no?
+YES OKAY,Yes Okay.
+YES SLEEP,"Yes, sleep."
+YES UNDERSTAND,"Yes, I understand."
+YES WANT,"Yes, want."
+YES YOU,Yes You.
+YOU,You.
+YOU EAT,You eat.
+YOU FAMILY,Your family.
+YOU FRIEND,Your friend.
+YOU FROM,You're from here.
+YOU GO,You go.
+YOU GO HERE,You're coming here.
+YOU GO HOME,You're going home.
+YOU HELP,You help.
+YOU HELP ME,You help me.
+YOU HERE,You're here.
+YOU HOME,You're home.
+YOU I,You I.
+YOU KNOW,You know.
+YOU ME,You Me.
+YOU SLEEP,You sleep.
+YOU TODAY,You Today.
+YOU UNDERSTAND,You understand.
+YOU WANT,You want.
+YOU WANT EAT,You want to eat.
+YOU WANT GO,You want to go.
+YOU WANT GO HOME,You want to go home.
+YOU WANT HELP,You need help.
+YOU WANT HOME,You want to go home.
+YOU WANT SLEEP,You want to sleep.
