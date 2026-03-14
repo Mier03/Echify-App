@@ -1,6 +1,8 @@
 # whisper_engine.py
 import torch
 from typing import Optional
+import os
+import subprocess
 from faster_whisper import WhisperModel
 
 
@@ -17,20 +19,25 @@ class WhisperEngine:
 
         torch.set_num_threads(1)
 
-    def transcribe_file(self, audio_path: str) -> Optional[str]:
-        """Transcribe speech from WAV file."""
+    def transcribe_file(self, audio_path: str):
         try:
-            segments, _ = self.model.transcribe(
-                audio_path,
-                beam_size=5,
-                language="en",
-                vad_filter=True,
-                condition_on_previous_text=False
-            )
+            # NEW: Pre-process the file just like your mic_test.sh
+            processed_path = audio_path.replace(".wav", "_clean.wav")
+            
+            # This command does the remix 1 and gain 5 automatically
+            subprocess.run([
+                "sox", audio_path, processed_path, 
+                "remix", "1", "gain", "5"
+            ], check=True)
 
-            text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+            segments, _ = self.model.transcribe(processed_path, language="en")
+            text = " ".join(seg.text.strip() for seg in segments)
+            
+            # Clean up the temp file
+            if os.path.exists(processed_path):
+                os.remove(processed_path)
+                
             return text if text else None
-
         except Exception as e:
             print(f"Transcription error: {e}")
             return None

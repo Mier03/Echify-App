@@ -53,8 +53,9 @@ class SharedMic:
             print(f"⚠️ Mic status: {status}")
 
         # Use LEFT channel only, same idea as: sox remix 1
-        mono = indata[:, 0].copy()
-
+        mono = indata[:, 0].copy() * 5.0
+        mono = np.clip(mono, -1.0, 1.0)
+        
         rms = float(np.sqrt(np.mean(np.square(mono)))) if len(mono) > 0 else 0.0
 
         with self.lock:

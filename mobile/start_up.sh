@@ -34,7 +34,28 @@ pkill -f "$CHROME_PROFILE" 2>/dev/null
 sleep 3
 
 echo "🧹 Cleaning old Chromium profile..."
-# rm -rf "$CHROME_PROFILE"
+
+##
+echo "🎙️ Validating Microphone (Google VoiceHAT)..."
+
+# Check if Card 2 (VoiceHAT) is actually connected
+if ! arecord -l | grep -q "card 2"; then
+    echo "❌ ERROR: Google VoiceHAT (Card 2) NOT detected!"
+    echo "Check physical connection on the 40-pin header."
+    exit 1
+fi
+
+# Run a quick 2-second silent record/process test to 'wake up' the ALSA stream
+# This prevents the 'static' glitch often seen on the first use after boot
+arecord -D plughw:2,0 -r 48000 -c 2 -f S32_LE -d 2 /tmp/startup_mic_test.wav > /dev/null 2>&1
+sox /tmp/startup_mic_test.wav /tmp/startup_mono.wav remix 1 gain 5 > /dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+    echo "✅ Microphone hardware initialized."
+else
+    echo "⚠️ WARNING: Mic initialization had issues, but continuing..."
+fi
+##
 
 echo "🎥 Preparing virtual webcam..."
 sudo modprobe -r v4l2loopback 2>/dev/null
