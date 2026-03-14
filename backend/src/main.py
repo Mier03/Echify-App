@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
     # KEEP THESE — these are part of your working Pi setup
     shared_camera.start()
-    # shared_mic.start()   # uncomment only if you actually use/start it here
+    shared_mic.start()   # uncomment only if you actually use/start it here
 
     yield
 
@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
 
     # KEEP THESE — these are part of your working Pi setup
     shared_camera.stop()
-    # shared_mic.stop()    # uncomment only if you actually use/start it here
+    shared_mic.stop()    # uncomment only if you actually use/start it here
 
     # ENABLE_LOGGING
     # if _server_logger:
