@@ -11,7 +11,7 @@ class SharedMic:
         samplerate=48000,
         channels=2,
         blocksize=4800,
-        device_index=2,
+        device_index=1,
     ):
         self.samplerate = samplerate
         self.channels = channels
