@@ -43,8 +43,6 @@ def start_gstreamer():
         "!",
         "video/x-raw,width=640,height=480,format=NV12,colorimetry=bt601,framerate=30/1",
         "!",
-        "videoflip", "method=rotate-180",
-        "!",
         "videoconvert",
         "!",
         "video/x-raw,format=I420",
