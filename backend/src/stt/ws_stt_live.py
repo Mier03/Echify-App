@@ -45,26 +45,26 @@ def save_wav(samples: np.ndarray, path: str):
 
 def transcribe_samples(samples: np.ndarray) -> str:
     model = get_model()
-
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp_path = tmp.name
+        clean_path = tmp_path.replace(".wav", "_clean.wav") # Add this
 
     try:
         mono_16k = downsample_48k_to_16k(samples)
         save_wav(mono_16k, tmp_path)
-
-        segments, _ = model.transcribe(
-            tmp_path,
-            language="en",
-            vad_filter=True,          # enable — you have real signal now
-            condition_on_previous_text=False,
-            beam_size=5,
-        )
+        
+        # ADD THIS: Use the 'sox' fix that worked in your script!
+        import subprocess
+        subprocess.run(["sox", tmp_path, clean_path, "gain", "5"], check=True)
+        
+        # Transcribe the CLEAN file, not the raw one
+        segments, _ = model.transcribe(clean_path, language="en") 
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return text
     finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        # Clean up both temp files
+        for p in [tmp_path, clean_path]:
+            if os.path.exists(p): os.remove(p)
 
 
 @router.websocket("/ws/stt-live")

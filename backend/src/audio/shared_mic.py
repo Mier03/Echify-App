@@ -37,7 +37,7 @@ class SharedMic:
                 samplerate=self.samplerate,
                 channels=self.channels,
                 blocksize=self.blocksize,
-                dtype="int32",  
+                dtype="float32",
                 device=self.device_index,
                 callback=self._audio_callback,
             )
@@ -53,8 +53,8 @@ class SharedMic:
             print(f"⚠️ Mic status: {status}")
 
         # Use LEFT channel only, same idea as: sox remix 1
-        mono = indata[:, 0].astype(np.float32) / np.float32(2**31)
-        mono = np.clip(mono * 5.0, -1.0, 1.0)
+        mono = indata[:, 0].copy() * 5.0
+        mono = np.clip(mono, -1.0, 1.0)
         
         rms = float(np.sqrt(np.mean(np.square(mono)))) if len(mono) > 0 else 0.0
 
