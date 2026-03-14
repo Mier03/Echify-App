@@ -19,27 +19,27 @@ class WhisperEngine:
 
         torch.set_num_threads(1)
 
-def transcribe_file(self, audio_path: str):
-    processed_path = audio_path + "_clean.wav"  
-    try:
-        subprocess.run(
-            ["sox", audio_path, processed_path, "remix", "1", "gain", "5"],
-            check=True
-        )
-        segments, _ = self.model.transcribe(
-            processed_path,
-            language="en",
-            vad_filter=True,
-            condition_on_previous_text=False,
-            beam_size=5,
-        )
-        text = " ".join(seg.text.strip() for seg in segments)
-        return text if text else None
+    def transcribe_file(self, audio_path: str):
+        processed_path = audio_path + "_clean.wav"  
+        try:
+            subprocess.run(
+                ["sox", audio_path, processed_path, "remix", "1", "gain", "5"],
+                check=True
+            )
+            segments, _ = self.model.transcribe(
+                processed_path,
+                language="en",
+                vad_filter=True,
+                condition_on_previous_text=False,
+                beam_size=5,
+            )
+            text = " ".join(seg.text.strip() for seg in segments)
+            return text if text else None
 
-    except Exception as e:
-        print(f"Transcription error: {e}")
-        return None
+        except Exception as e:
+            print(f"Transcription error: {e}")
+            return None
 
-    finally:
-        if os.path.exists(processed_path):  # ← now always defined ✅
-            os.remove(processed_path)
+        finally:
+            if os.path.exists(processed_path):  # ← now always defined ✅
+                os.remove(processed_path)
