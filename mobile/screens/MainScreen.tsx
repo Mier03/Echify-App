@@ -23,7 +23,6 @@ const SENTENCE_DISPLAY_MS = 4000;
 
 export default function MainScreen() {
   const [activeTab, setActiveTab] = useState<"sign" | "speech">("sign");
-  const [isSocketReady, setIsSocketReady] = useState(false);
 
   // ── Sign tab state (dynamic) ──────────────────────────────────────────────
   const [signedWords, setSignedWords] = useState<string[]>([]);
@@ -96,11 +95,9 @@ export default function MainScreen() {
   // ── Sign websocket effect (dynamic sign flow) ────────────────────────────
   useEffect(() => {
     if (activeTab === "sign") {
-      setIsSocketReady(false);
-
       connectSocket((data) => {
-        setIsSocketReady(true);
         console.log("📩 WS message:", data);
+
         const isReady = data?.is_ready === true;
         const label = data?.top1_label ?? "";
         const conf = data?.top1_conf ?? 0;
@@ -147,7 +144,6 @@ export default function MainScreen() {
       });
     } else {
       closeSocket();
-      setIsSocketReady(false);
     }
 
     return () => {
@@ -248,12 +244,7 @@ export default function MainScreen() {
           {activeTab === "sign" ? (
             <View style={styles.signLayout}>
               <View style={styles.cameraPanel}>
-                {isSocketReady
-                  ? <CameraComponent />
-                  : <View style={styles.cameraLoading}>
-                      <Text style={{ color: "#fff" }}>Connecting...</Text>
-                    </View>
-                 }
+                <CameraComponent />
               </View>
 
               <View style={styles.translationPanel}>
@@ -448,13 +439,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: THEME.border,
-  },
-
-  cameraLoading: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
   },
 
   translationPanel: {
