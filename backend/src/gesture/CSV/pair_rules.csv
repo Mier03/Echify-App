@@ -3,26 +3,32 @@ LEFT_CAT,RIGHT_CAT
 # ── Greetings with people ─────────────────────────────────────────────────────
 POLITENESS,POLITENESS
 POLITENESS,PEOPLE
+POLITENESS,IDENTITY
 
 # ── Answers ───────────────────────────────────────────────────────────────────
 ANSWERS,ANSWERS
 ANSWERS,ACTIONS
 ANSWERS,PEOPLE
+ANSWERS,IDENTITY
 
 # ── People + actions (I GO, YOU EAT, etc.) ───────────────────────────────────
 PEOPLE,ACTIONS
 PEOPLE,PEOPLE
 PEOPLE,PLACE
+PEOPLE,IDENTITY
+PEOPLE,TIME
 
 # ── Actions + places (GO HOME, EAT HERE, etc.) ───────────────────────────────
 ACTIONS,PLACE
 ACTIONS,PEOPLE
 ACTIONS,TIME
+ACTIONS,IDENTITY
 
 # ── Questions ─────────────────────────────────────────────────────────────────
 QUESTIONS,PEOPLE
 QUESTIONS,ACTIONS
 QUESTIONS,PLACE
+QUESTIONS,IDENTITY
 
 # ── Time ──────────────────────────────────────────────────────────────────────
 TIME,ACTIONS
@@ -32,3 +38,9 @@ PEOPLE,TIME
 # ── Place combinations ────────────────────────────────────────────────────────
 PLACE,PLACE
 PLACE,PEOPLE
+
+# ── Identity (NAME) ───────────────────────────────────────────────────────────
+IDENTITY,PEOPLE
+IDENTITY,QUESTIONS
+QUESTIONS,IDENTITY
+PEOPLE,IDENTITY

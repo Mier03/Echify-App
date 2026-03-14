@@ -1,6 +1,6 @@
 # backend/src/gesture/sentence_builder.py
 """
-SentenceBuilder — updated for new 33-label FSL dataset.
+SentenceBuilder — updated for 34-label FSL dataset (added NAME).
 
 Labels by category:
   POLITENESS : HELLO, PLEASE, THANKS, SORRY, GOODBYE, MORNING, AFTERNOON
@@ -10,6 +10,7 @@ Labels by category:
   ANSWERS    : YES, NO, OKAY, GOOD, BAD
   TIME       : TODAY
   PLACE      : HOME, HERE, FROM
+  IDENTITY   : NAME
 """
 
 import time
@@ -23,11 +24,11 @@ class SentenceBuilder:
         self.long_pause    = long_pause
         self.max_tokens    = max_tokens
 
-        self.tokens:           List[str]      = []
+        self.tokens:           List[str]       = []
         self.pause_start_time: Optional[float] = None
         self.last_token_time:  Optional[float] = None
 
-        # ── Category sets (new labels) ────────────────────────────────────────
+        # ── Category sets ─────────────────────────────────────────────────────
         self.politeness = {"HELLO", "PLEASE", "THANKS", "SORRY", "GOODBYE", "MORNING", "AFTERNOON"}
         self.actions    = {"WANT", "HELP", "GO", "EAT", "SLEEP", "UNDERSTAND", "KNOW"}
         self.questions  = {"HOW", "WHAT", "WHERE", "WHY", "WHO"}
@@ -36,6 +37,7 @@ class SentenceBuilder:
         self.answers    = {"YES", "NO", "OKAY", "GOOD", "BAD"}
         self.time_words = {"TODAY"}
         self.places     = {"HOME", "HERE", "FROM"}
+        self.identity   = {"NAME"}
 
         # tokens that should never appear in a sentence
         self.ignore_tokens = {
@@ -101,8 +103,9 @@ class SentenceBuilder:
     def _canonicalize(self, toks: List[str]) -> List[str]:
         toks = self._dedupe_consecutive(toks)
 
-        # PLEASE always comes first
-        if "PLEASE" in toks and toks[0] != "PLEASE":
+        # PLEASE always comes first (unless question word present)
+        has_question = any(t in self.questions for t in toks)
+        if "PLEASE" in toks and toks[0] != "PLEASE" and not has_question:
             toks.remove("PLEASE")
             toks.insert(0, "PLEASE")
 
@@ -117,10 +120,9 @@ class SentenceBuilder:
         if "WHERE" in toks and any(p in toks for p in self.people):
             return ["WHERE"] + [t for t in toks if t != "WHERE"]
 
-        # Subject–Verb–Place (SVO) ordering
+        # Subject–Verb–Object ordering
         subj  = next((t for t in toks if t in self.subjects), None)
         verb  = next((t for t in toks if t in self.actions),  None)
-        place = next((t for t in toks if t in self.places),   None)
 
         if subj and verb:
             rest = [t for t in toks if t not in {subj, verb}]
@@ -136,6 +138,81 @@ class SentenceBuilder:
         if not toks:
             return ""
 
+        # Check explicit multi-word patterns BEFORE canonicalization
+        # so token reordering doesn't break exact-match lookups
+        pre = " ".join(toks)
+
+        # ── Pre-canonicalization exact matches ────────────────────────────────
+        # "I don't understand" variants
+        if pre in {"I NO UNDERSTAND", "ME NO UNDERSTAND",
+                   "I NOT UNDERSTAND", "ME NOT UNDERSTAND"}:
+            return "I don't understand."
+
+        # "Please help me" variants
+        if pre in {"PLEASE HELP ME", "PLEASE HELP I"}:
+            return "Please help me."
+        if pre in {"HELP ME PLEASE", "HELP I PLEASE"}:
+            return "Help me, please!"
+
+        # "I go home" / "You go home"
+        if pre in {"I GO HOME", "ME GO HOME"}:
+            return "I'm going home."
+        if pre == "YOU GO HOME":
+            return "You're going home."
+
+        # "You go home today"
+        if pre == "YOU GO HOME TODAY":
+            return "You go home today?"
+        if pre == "GO HOME TODAY":
+            return "Going home today?"
+
+        # "I help you"
+        if pre == "I HELP YOU":
+            return "I will help you."
+
+        # Greetings with people names (before canonicalizer)
+        if pre == "HELLO FRIEND":           return "Hello, friend."
+        if pre == "HELLO FAMILY":           return "Hello, family."
+        if pre == "GOODBYE FRIEND":         return "Goodbye, friend."
+        if pre == "GOODBYE FAMILY":         return "Goodbye, family."
+        if pre == "MORNING FRIEND":         return "Good morning, friend."
+        if pre == "MORNING FAMILY":         return "Good morning, family."
+        if pre == "AFTERNOON FRIEND":       return "Good afternoon, friend."
+        if pre == "AFTERNOON FAMILY":       return "Good afternoon, family."
+
+        # "I need help" / "I want help" → always "I need help"
+        if pre in {"I WANT HELP", "ME WANT HELP", "I NEED HELP", "ME NEED HELP"}:
+            return "I need help."
+        if pre in {"YOU WANT HELP", "YOU NEED HELP"}:
+            return "You need help."
+
+        # "What do you want?" variants (before canonicalizer reorders YOU)
+        if pre in {"WHAT WANT YOU", "WHAT YOU WANT", "YOU WANT WHAT"}:
+            return "What do you want?"
+
+        # "I want to go home" variants
+        if pre in {"I WANT GO HOME", "ME WANT GO HOME"}:
+            return "I want to go home."
+        if pre == "YOU WANT GO HOME":
+            return "You want to go home."
+
+        # "Hello, how are you?"
+        if pre in {"HELLO HOW YOU", "HELLO HOW ARE YOU"}:
+            return "Hello! How are you?"
+
+        # "Okay, where?"
+        if pre in {"OKAY WHERE", "OKAY WHERE YOU"}:
+            return "Okay, where?"
+
+        # "I know! I'll help you."
+        if pre in {"I KNOW I HELP YOU", "KNOW I HELP YOU"}:
+            return "I know! I will help you."
+
+        # "No problem"
+        if pre == "NO PROBLEM":
+            return "No problem."
+
+        # Now apply canonicalization for everything else
         toks   = self._canonicalize(toks)
         joined = " ".join(toks)
 
@@ -163,13 +240,14 @@ class SentenceBuilder:
             if t == "GO":           return "Go."
             if t == "EAT":          return "Eat."
             if t == "SLEEP":        return "Sleep."
-            if t == "UNDERSTAND":   return "Understand."
-            if t == "KNOW":         return "Know."
+            if t == "UNDERSTAND":   return "I understand."
+            if t == "KNOW":         return "I know."
             if t == "I":            return "I."
             if t == "YOU":          return "You."
             if t == "ME":           return "Me."
             if t == "FRIEND":       return "Friend."
             if t == "FAMILY":       return "Family."
+            if t == "NAME":         return "Name."
             if t in self.questions: return f"{t.title()}?"
             return f"{t.title()}."
 
@@ -182,12 +260,40 @@ class SentenceBuilder:
         if joined == "SORRY PLEASE":        return "Sorry, please."
         if joined == "THANKS PLEASE":       return "Thank you, please."
 
+        # ── Script: conversation openers ──────────────────────────────────────
+        # "Hello!" / "Hello, how are you?"
+        if joined == "HELLO HOW YOU":       return "Hello! How are you?"
+        if joined == "HELLO YOU":           return "Hello, you!"
+        if joined == "GOOD THANKS":         return "Good, thanks."
+        if joined == "GOOD THANK YOU":      return "Good, thank you."
+
+        # ── NAME patterns ─────────────────────────────────────────────────────
+        if joined == "WHAT NAME YOU":       return "What is your name?"
+        if joined == "WHAT YOU NAME":       return "What is your name?"
+        if joined == "NAME WHAT YOU":       return "What is your name?"
+        if joined == "YOU NAME WHAT":       return "What is your name?"
+        if joined == "WHAT NAME":           return "What is the name?"
+        if joined == "MY NAME":             return "My name."
+        if joined == "I NAME":              return "My name."
+        if joined == "ME NAME":             return "My name."
+        if joined == "NAME I":              return "My name."
+        if joined == "NAME ME":             return "My name."
+        if joined == "YOU NAME":            return "Your name."
+        if joined == "NAME YOU":            return "Your name."
+        if joined == "FRIEND NAME":         return "My friend's name."
+        if joined == "FAMILY NAME":         return "My family's name."
+        if joined == "WHO NAME":            return "Who is that?"
+        if joined == "NAME WHO":            return "Who is that?"
+
         # ── Questions ─────────────────────────────────────────────────────────
         if joined == "HOW YOU":             return "How are you?"
         if joined == "HOW I":               return "How am I?"
+        if joined == "HOW ME":              return "How am I?"
         if joined == "WHAT YOU WANT":       return "What do you want?"
+        if joined == "WHAT WANT YOU":       return "What do you want?"
         if joined == "WHAT YOU EAT":        return "What do you eat?"
         if joined == "WHAT YOU KNOW":       return "What do you know?"
+        if joined == "WHAT YOU NAME":       return "What is your name?"
         if joined == "WHERE YOU GO":        return "Where are you going?"
         if joined == "WHERE YOU FROM":      return "Where are you from?"
         if joined == "WHERE HOME":          return "Where is home?"
@@ -198,6 +304,11 @@ class SentenceBuilder:
         if joined == "WHY YOU GO":          return "Why are you going?"
         if joined == "WHY YOU SLEEP":       return "Why are you sleeping?"
         if joined == "WHY YOU HERE":        return "Why are you here?"
+        if joined == "WHAT YOU":            return "What about you?"
+        if joined == "WHERE YOU HOME":      return "Where is your home?"
+
+        # ── Script: "What you want?" ──────────────────────────────────────────
+        if joined == "WHAT WANT":           return "What do you want?"
 
         # ── YES/NO + action ───────────────────────────────────────────────────
         if joined == "YES UNDERSTAND":      return "Yes, I understand."
@@ -207,6 +318,32 @@ class SentenceBuilder:
         if joined == "OKAY GOOD":           return "Okay, good."
         if joined == "YES GOOD":            return "Yes, good."
         if joined == "NO BAD":              return "No, bad."
+        if joined == "OKAY WHERE":          return "Okay, where?"
+
+        # ── Script: "I not understand / Please help me" ───────────────────────
+        if joined == "I NOT UNDERSTAND":        return "I don't understand."
+        if joined == "ME NOT UNDERSTAND":       return "I don't understand."
+        if joined == "I NO UNDERSTAND":         return "I don't understand."
+        if joined == "ME NO UNDERSTAND":        return "I don't understand."
+        if joined == "PLEASE HELP ME":          return "Please help me."
+        if joined == "PLEASE HELP I":           return "Please help me."
+        if joined == "HELP ME PLEASE":          return "Help me, please!"
+        if joined == "I HELP YOU":              return "I will help you."
+        if joined == "I HELP":                  return "I will help."
+
+        # ── Script: "You good friend" / "I know! I help you." ─────────────────
+        if joined == "YOU GOOD FRIEND":         return "You are a good friend."
+        if joined == "I KNOW I HELP YOU":       return "I know! I will help you."
+        if joined == "KNOW I HELP YOU":         return "I know! I will help you."
+
+        # ── Script: "No problem / You go home today?" ─────────────────────────
+        if joined == "NO PROBLEM":              return "No problem."
+        if joined == "YOU GO HOME TODAY":       return "You go home today?"
+        if joined == "GO HOME TODAY":           return "Going home today?"
+
+        # ── Script: "Yes. Goodbye!" ───────────────────────────────────────────
+        if joined == "YES GOODBYE":             return "Yes, goodbye!"
+        if joined == "GOODBYE YES":             return "Yes, goodbye!"
 
         # ── I/YOU + action (subject–verb) ─────────────────────────────────────
         if len(toks) == 2 and toks[0] in self.subjects and toks[1] in self.actions:
@@ -214,8 +351,8 @@ class SentenceBuilder:
             verb = toks[1].lower()
             verb_map = {
                 "want":       f"{subj} want.",
-                "help":       f"{subj} need help." if subj == "I" else f"{subj} need help.",
-                "go":         f"{subj} go." if subj == "I" else f"{subj} go.",
+                "help":       f"Help me!" if subj == "I" else f"{subj} help.",
+                "go":         f"{subj} go.",
                 "eat":        f"{subj} eat.",
                 "sleep":      f"{subj} sleep.",
                 "understand": f"{subj} understand.",
@@ -240,10 +377,12 @@ class SentenceBuilder:
                 return f"{subj} want to go {obj.lower()}."
             if obj in self.people:
                 return f"{subj} want {obj.lower()}."
+            if obj == "NAME":
+                return f"{subj} want to know the name."
             return f"{subj} want {obj.title()}."
 
         # ── I/YOU + GO + HOME (common phrase) ────────────────────────────────
-        if toks == ["I", "GO", "HOME"] or toks == ["ME", "GO", "HOME"]:
+        if toks in [["I", "GO", "HOME"], ["ME", "GO", "HOME"]]:
             return "I'm going home."
         if toks == ["YOU", "GO", "HOME"]:
             return "You're going home."
@@ -253,6 +392,9 @@ class SentenceBuilder:
             return f"Please {toks[1].lower()}."
         if len(toks) == 2 and toks[0] == "PLEASE" and toks[1] in self.places:
             return f"Please go {toks[1].lower()}."
+        if len(toks) == 3 and toks[0] == "PLEASE" and toks[1] in self.actions and toks[2] in self.subjects:
+            obj = "me" if toks[2] in {"I", "ME"} else "you"
+            return f"Please {toks[1].lower()} {obj}."
 
         # ── HELP + subject ────────────────────────────────────────────────────
         if len(toks) == 2 and toks[0] == "HELP" and toks[1] in self.subjects:
@@ -283,6 +425,15 @@ class SentenceBuilder:
         if len(toks) == 2 and toks[0] in self.subjects and toks[1] == "FROM":
             subj = "I" if toks[0] in {"I", "ME"} else "You"
             return f"{subj} am from here." if subj == "I" else f"{subj} are from here."
+
+        # ── NAME + subject / subject + NAME ───────────────────────────────────
+        if len(toks) == 2 and "NAME" in toks:
+            other = toks[0] if toks[1] == "NAME" else toks[1]
+            if other in {"I", "ME"}:        return "My name."
+            if other == "YOU":              return "Your name."
+            if other == "FRIEND":           return "My friend's name."
+            if other == "FAMILY":           return "My family's name."
+            if other in self.questions:     return f"{other.title()} is the name?"
 
         # ── Questions with question word ──────────────────────────────────────
         if toks[0] in self.questions:
