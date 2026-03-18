@@ -25,7 +25,7 @@ def get_model():
     global _model
     if _model is None:
         print("🔊 Loading faster-whisper base.en on cpu")
-        _model = WhisperModel("base.en", device="cpu", compute_type="int8")
+        _model = WhisperModel("tiny.en", device="cpu", compute_type="int8")
     return _model
 
 
@@ -48,25 +48,20 @@ def save_wav(samples: np.ndarray, path: str):
 
 def transcribe_samples(samples: np.ndarray) -> str:
     model = get_model()
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        tmp_path = tmp.name
 
-    try:
-        mono_16k = downsample_48k_to_16k(samples)
-        save_wav(mono_16k, tmp_path)
+    mono_16k = downsample_48k_to_16k(samples)
 
-        segments, _ = model.transcribe(
-            tmp_path,
-            language="en",
-            vad_filter=True,             
-            condition_on_previous_text=False,  
-            beam_size=1,                   
-        )
-        text = " ".join(seg.text.strip() for seg in segments).strip()
-        return text
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    # 🔥 Direct numpy input (NO FILE)
+    segments, _ = model.transcribe(
+        mono_16k,
+        language="en",
+        vad_filter=False,  # 🔥 disable VAD (faster)
+        condition_on_previous_text=False,
+        beam_size=1,
+    )
+
+    text = " ".join(seg.text.strip() for seg in segments).strip()
+    return text
 
 
 @router.websocket("/ws/stt-live")
@@ -126,7 +121,7 @@ async def stt_live_endpoint(websocket: WebSocket):
                 text = ""
                 if len(audio) > 0:
                     try:
-                        text = transcribe_samples(audio)
+                        text = await asyncio.to_thread(transcribe_samples, audio)
                         print(f"🧪 Transcript text: {text}")
                     except Exception as e:
                         print(f"❌ STT transcription error: {e}")
