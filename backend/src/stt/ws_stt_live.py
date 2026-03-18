@@ -24,13 +24,15 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        print("🔊 Loading faster-whisper small.en on cpu")
-        _model = WhisperModel("small.en", device="cpu", compute_type="int8")
+        print("🔊 Loading faster-whisper base.en on cpu")
+        _model = WhisperModel("base.en", device="cpu", compute_type="int8")
     return _model
 
 
+from scipy.signal import resample_poly
+
 def downsample_48k_to_16k(samples: np.ndarray) -> np.ndarray:
-    return samples[::3].copy()
+    return resample_poly(samples, 1, 3).astype(np.float32)
 
 
 def save_wav(samples: np.ndarray, path: str):
@@ -58,7 +60,7 @@ def transcribe_samples(samples: np.ndarray) -> str:
             language="en",
             vad_filter=True,             
             condition_on_previous_text=False,  
-            beam_size=5,                   
+            beam_size=1,                   
         )
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return text

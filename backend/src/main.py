@@ -23,6 +23,7 @@ from src.gesture.ws_fsl_dynamic_server import router as fsl_dynamic_router
 from src.stt.stt_http import router as stt_router
 from src.routes.preview import router as preview_router
 from src.stt.ws_stt_live import router as stt_live_router
+from src.stt.ws_stt_live import get_model
 
 # ENABLE_LOGGING
 # from session_logger import SessionLogger
@@ -59,7 +60,7 @@ async def lifespan(app: FastAPI):
     # KEEP THESE — these are part of your working Pi setup
     shared_camera.start()
     shared_mic.start()   # uncomment only if you actually use/start it here
-
+    get_model()
     yield
 
     print("\n🛑 Server shutting down...")

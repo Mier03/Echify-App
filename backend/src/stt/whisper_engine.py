@@ -7,7 +7,7 @@ from faster_whisper import WhisperModel
 
 
 class WhisperEngine:
-    def __init__(self, model_size="small.en"):
+    def __init__(self, model_size="base.en"):
         self.device = "cpu"  # Change to "cuda" if using GPU
         print(f"🔊 Loading faster-whisper {model_size} on {self.device}")
 
@@ -17,7 +17,7 @@ class WhisperEngine:
             compute_type="int8"  # Fast + efficient
         )
 
-        torch.set_num_threads(1)
+        #torch.set_num_threads(1)
 
     def transcribe_file(self, audio_path: str):
         processed_path = audio_path + "_clean.wav"  
@@ -31,7 +31,7 @@ class WhisperEngine:
                 language="en",
                 vad_filter=True,
                 condition_on_previous_text=False,
-                beam_size=5,
+                beam_size=1,
             )
             text = " ".join(seg.text.strip() for seg in segments)
             return text if text else None
