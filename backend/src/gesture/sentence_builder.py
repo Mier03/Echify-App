@@ -79,7 +79,14 @@ class SentenceBuilder:
             self.pause_start_time = now
             return None
 
-        if (now - self.pause_start_time) >= self.long_pause and self.tokens:
+        elapsed = now - self.pause_start_time
+
+        # Short pause (0.8s) with 3+ tokens — likely a complete phrase
+        if elapsed >= self.short_pause and len(self.tokens) >= 3:
+            return self.finalize()
+
+        # Long pause (2.2s) — finalize anything, even single words
+        if elapsed >= self.long_pause and self.tokens:
             return self.finalize()
 
         return None
@@ -162,9 +169,9 @@ class SentenceBuilder:
 
         # "You go home today"
         if pre == "YOU GO HOME TODAY":
-            return "You go home today?"
+            return "You go home today."
         if pre == "GO HOME TODAY":
-            return "Going home today?"
+            return "Going home today."
 
         # "I help you"
         if pre == "I HELP YOU":
@@ -211,6 +218,29 @@ class SentenceBuilder:
         # "No problem"
         if pre == "NO PROBLEM":
             return "No problem."
+
+        # Common question phrases — must be checked BEFORE the question-word
+        # redirect below, because they need exact phrasing preserved
+        if pre == "WHERE YOU GO":           return "Where are you going?"
+        if pre == "WHERE YOU FROM":         return "Where are you from?"
+        if pre == "WHERE YOU HOME":         return "Where is your home?"
+        if pre == "WHERE YOU":              return "Where are you?"
+        if pre == "WHY YOU HERE":           return "Why are you here?"
+        if pre == "WHY YOU GO":             return "Why are you going?"
+        if pre == "WHY YOU SLEEP":          return "Why are you sleeping?"
+        if pre == "WHO YOU":                return "Who are you?"
+        if pre == "WHO FRIEND":             return "Who is your friend?"
+        if pre == "WHO FAMILY":             return "Who is your family?"
+        if pre == "HOW YOU":                return "How are you?"
+        if pre == "HOW I":                  return "How am I?"
+        if pre == "HOW ME":                 return "How am I?"
+
+        # If any question word is present anywhere in the token list,
+        # route directly to semantic reorder which handles it correctly
+        if any(t in self.questions for t in toks) and len(toks) > 1:
+            # Only bypass to semantic if it's NOT already an exact-match above
+            # (exact matches above already returned, so we're safe here)
+            return self._semantic_reorder(toks)
 
         # Now apply canonicalization for everything else
         toks   = self._canonicalize(toks)
@@ -410,7 +440,9 @@ class SentenceBuilder:
         if len(toks) >= 2 and toks[0] in self.subjects and toks[1] in self.actions and "TODAY" in toks:
             subj  = "I" if toks[0] in {"I", "ME"} else "You"
             verb  = toks[1].lower()
-            return f"{subj} {verb} today."
+            place = next((t for t in toks if t in self.places), None)
+            place_str = (" " + {"HOME":"home","HERE":"here","FROM":"from here"}.get(place, place.lower())) if place else ""
+            return f"{subj} {verb}{place_str} today."
 
         # ── FRIEND/FAMILY + action ────────────────────────────────────────────
         if len(toks) == 2 and toks[0] in {"FRIEND", "FAMILY"} and toks[1] in self.actions:
@@ -440,8 +472,194 @@ class SentenceBuilder:
             rest = " ".join(t.lower() for t in toks[1:])
             return f"{toks[0].title()} {rest}?"
 
-        # ── Default fallback ──────────────────────────────────────────────────
-        return " ".join(t.title() for t in toks) + "."
+        # ── Semantic fallback — handles any unknown word order ────────────────
+        return self._semantic_reorder(toks)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Semantic reorder — handles ANY word order (rambled input)
+    # Slot order: POLITENESS → NEGATION → SUBJECT → VERB → OBJECT/PLACE → TIME
+    # ──────────────────────────────────────────────────────────────────────────
+    def _semantic_reorder(self, toks: List[str]) -> str:
+        pool = list(toks)
+
+        def take(candidates):
+            for c in candidates:
+                if c in pool:
+                    pool.remove(c)
+                    return c
+            return None
+
+        def take_all(category):
+            found = [t for t in pool if t in category]
+            for f in found:
+                pool.remove(f)
+            return found
+
+        verb_map  = {
+            "GO": "go", "EAT": "eat", "SLEEP": "sleep", "WANT": "want",
+            "HELP": "help", "UNDERSTAND": "understand", "KNOW": "know",
+        }
+        place_map = {"HOME": "home", "HERE": "here", "FROM": "from here"}
+        polite_map = {
+            "SORRY": "Sorry,",  "PLEASE": "please",     "THANKS": "Thank you,",
+            "HELLO": "Hello!",  "GOODBYE": "Goodbye!",  "MORNING": "Good morning!",
+            "AFTERNOON": "Good afternoon!",
+        }
+
+        # ── Slot extraction ────────────────────────────────────────────────────
+        polite_words  = take_all(self.politeness)
+
+        # FIX: question word must be extracted BEFORE places so WHERE is
+        # treated as a question word, not a place
+        question_word = take(list(self.questions))
+
+        negation      = take({"NO", "NOT"})
+        subject_tok   = take(["I", "ME", "YOU"])
+
+        # FIX: extract all action tokens first, then assign roles —
+        # prevents the same word appearing as both verb and second_action
+        all_actions   = [t for t in pool if t in self.actions]
+        verb_tok      = None
+        second_action = None
+
+        if "WANT" in all_actions:
+            verb_tok = "WANT"
+            pool.remove("WANT")
+            # secondary is any other action (consumed once from pool)
+            other_actions = [t for t in pool if t in self.actions]
+            if other_actions:
+                second_action = other_actions[0]
+                pool.remove(second_action)
+        elif all_actions:
+            verb_tok = all_actions[0]
+            pool.remove(verb_tok)
+            # consume any remaining action tokens so they don't appear as leftover
+            for extra in [t for t in pool if t in self.actions]:
+                pool.remove(extra)
+
+        # FIX: WHERE is already taken as question_word — only pull real places
+        place_tok     = take(list(self.places - {"FROM"})) or take(["FROM"])
+        time_tok      = take(list(self.time_words))
+        answer_tok    = take(list(self.answers - {"NO"}))
+        identity_tok  = take(list(self.identity))
+        people_tok    = take(list(self.people - {"I", "ME", "YOU"}))
+        leftover      = [t for t in pool if t not in self.ignore_tokens]
+
+        # Subject resolution
+        subj_eng = poss_eng = None
+        if subject_tok in {"I", "ME"}:
+            subj_eng = "I";   poss_eng = "my"
+        elif subject_tok == "YOU":
+            subj_eng = "you"; poss_eng = "your"
+
+        # Default subject to "you" for questions when none signed
+        if question_word and subj_eng is None and (verb_tok or identity_tok):
+            subj_eng = "you"; poss_eng = "your"
+
+        # ── Question sentence ──────────────────────────────────────────────────
+        if question_word:
+            q = {"HOW":"How","WHAT":"What","WHERE":"Where",
+                 "WHY":"Why","WHO":"Who"}.get(question_word, question_word.title())
+
+            if identity_tok:
+                return f"{q} is {(poss_eng + ' ') if poss_eng else ''}name?"
+
+            if verb_tok:
+                v   = verb_map.get(verb_tok, verb_tok.lower())
+                neg = "don't " if negation else ""
+
+                if verb_tok == "WANT":
+                    v2 = (" to " + verb_map[second_action]) if second_action else ""
+                    p  = (" " + place_map[place_tok]) if place_tok and not second_action else \
+                         (" " + place_map[place_tok]) if place_tok else ""
+                    s = subj_eng if subj_eng else "you"
+                    return f"{q} do {s} {neg}want{v2}{p}?"
+
+                p = (" " + place_map[place_tok]) if place_tok else ""
+                s = subj_eng if subj_eng else "you"
+
+                if subj_eng == "I":
+                    return f"{q} do I {neg}{v}{p}?"
+                return f"{q} do {s} {neg}{v}{p}?"
+
+            # No verb — question about state/identity
+            if subj_eng == "you":
+                q_be = {"HOW":"How","WHERE":"Where","WHY":"Why","WHO":"Who"}.get(question_word)
+                if q_be:
+                    return f"{q_be} are you?"
+                return f"{q} do you want?"
+            if subj_eng == "I":
+                return f"{q} am I?"
+            if people_tok:
+                return f"{q} is {people_tok.lower()}?"
+            return f"{q}?"
+
+        # ── Statement sentence ────────────────────────────────────────────────
+        parts = []
+
+        opening = [p for p in polite_words if p != "PLEASE"]
+        closing = [p for p in polite_words if p == "PLEASE"]
+
+        for op in opening:
+            parts.append(polite_map[op])
+
+        if subj_eng:
+            parts.append(subj_eng.capitalize() if not parts else subj_eng)
+
+        if verb_tok:
+            if negation:
+                if verb_tok == "WANT":
+                    v2 = (" to " + verb_map[second_action]) if second_action else ""
+                    p  = (" " + place_map[place_tok]) if place_tok else ""
+                    parts.append(f"don't want{v2}{p}")
+                    place_tok = None
+                else:
+                    parts.append(f"don't {verb_map.get(verb_tok, verb_tok.lower())}")
+            elif verb_tok == "WANT":
+                if second_action:
+                    p = (" " + place_map[place_tok]) if place_tok else ""
+                    parts.append(f"want to {verb_map[second_action]}{p}")
+                    place_tok = None
+                elif place_tok:
+                    parts.append("want to go")
+                else:
+                    parts.append("want")
+            elif verb_tok == "GO" and place_tok:
+                parts.append(f"go {place_map[place_tok]}")
+                place_tok = None
+            else:
+                parts.append(verb_map.get(verb_tok, verb_tok.lower()))
+
+        if place_tok:
+            parts.append(place_map[place_tok])
+
+        if people_tok:
+            parts.append(people_tok.lower())
+
+        if identity_tok:
+            parts.append(f"{(poss_eng + ' ') if poss_eng else ''}name")
+
+        if answer_tok and not verb_tok:
+            parts.append({"YES":"yes","GOOD":"good","BAD":"bad","OKAY":"okay"}.get(
+                answer_tok, answer_tok.lower()))
+
+        if time_tok:
+            parts.append("today")
+
+        for cp in closing:
+            parts.append(polite_map.get(cp, cp.lower()))
+
+        for lw in leftover:
+            parts.append(lw.lower())
+
+        if not parts:
+            return " ".join(t.title() for t in toks) + "."
+
+        result = " ".join(parts)
+        result = result[0].upper() + result[1:]
+        if not result.endswith((".", "!", "?")):
+            result += "."
+        return result
 
     # ──────────────────────────────────────────────────────────────────────────
     # Helpers
