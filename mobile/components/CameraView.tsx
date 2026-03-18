@@ -21,6 +21,16 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
     return `http://${host}:8000/preview`;
   }, []);
 
+useEffect(() => {
+  const retryInterval = setInterval(() => {
+    if (!previewLoaded && imgRef.current) {
+      console.log("🔁 Retrying camera preview...");
+      imgRef.current.src = previewUrl + "?t=" + new Date().getTime();
+    }
+  }, 3000);
+
+  return () => clearInterval(retryInterval);
+}, [previewLoaded, previewUrl]);
   useEffect(() => {
     if (!previewLoaded) return;
 
@@ -108,9 +118,16 @@ export default function CameraView({ onPrediction }: CameraViewProps) {
               setCameraError("");
             }}
             onError={() => {
-              setPreviewLoaded(false);
-              setCameraError("Preview unavailable");
-            }}
+            console.log("❌ Preview failed, retrying...");
+            setPreviewLoaded(false);
+            setCameraError("");
+
+            setTimeout(() => {
+              if (imgRef.current) {
+                imgRef.current.src = previewUrl + "?t=" + new Date().getTime();
+              }
+            }, 2000);
+          }}
           />
           <canvas ref={canvasRef} style={{ display: "none" }} />
         </>

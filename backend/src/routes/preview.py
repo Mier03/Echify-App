@@ -9,18 +9,32 @@ router = APIRouter()
 
 
 def generate_frames():
+    import numpy as np
+
     while True:
         frame = shared_camera.get_frame()
 
+        # ✅ FIX: always send a frame (even if camera not ready)
         if frame is None:
-            time.sleep(0.03)
-            continue
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+            cv2.putText(
+                frame,
+                "Starting camera...",
+                (120, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
 
         ok, buffer = cv2.imencode(
             ".jpg",
             frame,
             [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         )
+
         if not ok:
             time.sleep(0.03)
             continue
@@ -33,7 +47,6 @@ def generate_frames():
         )
 
         time.sleep(0.03)
-
 
 @router.get("/preview")
 def preview_stream():
