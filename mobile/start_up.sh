@@ -38,20 +38,32 @@ echo "🧹 Cleaning old Chromium profile..."
 ##
 echo "🎙️ Validating Microphone (Google VoiceHAT)..."
 
-# Check if Card 2 (VoiceHAT) is actually connected
-if ! arecord -l | grep -q "card 2"; then
-    echo "❌ ERROR: Google VoiceHAT (Card 2) NOT detected!"
+# Check if VoiceHAT is on card 1 OR card 2
+MIC_CARD=""
+if arecord -l | grep -q "card 2.*voicehat\|voicehat.*card 2" 2>/dev/null; then
+    MIC_CARD="2"
+elif arecord -l | grep -q "card 1.*voicehat\|voicehat.*card 1" 2>/dev/null; then
+    MIC_CARD="1"
+elif arecord -l | grep -q "card 2"; then
+    MIC_CARD="2"
+elif arecord -l | grep -q "card 1"; then
+    MIC_CARD="1"
+fi
+
+if [ -z "$MIC_CARD" ]; then
+    echo "❌ ERROR: Google VoiceHAT NOT detected on card 1 or card 2!"
     echo "Check physical connection on the 40-pin header."
     exit 1
 fi
 
-# Run a quick 2-second silent record/process test to 'wake up' the ALSA stream
-# This prevents the 'static' glitch often seen on the first use after boot
-arecord -D plughw:2,0 -r 48000 -c 2 -f S32_LE -d 2 /tmp/startup_mic_test.wav > /dev/null 2>&1
+echo "✅ VoiceHAT detected on card $MIC_CARD"
+
+# Wake up the ALSA stream on the detected card
+arecord -D plughw:${MIC_CARD},0 -r 48000 -c 2 -f S32_LE -d 2 /tmp/startup_mic_test.wav > /dev/null 2>&1
 sox /tmp/startup_mic_test.wav /tmp/startup_mono.wav remix 1 gain 5 > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
-    echo "✅ Microphone hardware initialized."
+    echo "✅ Microphone hardware initialized on card $MIC_CARD"
 else
     echo "⚠️ WARNING: Mic initialization had issues, but continuing..."
 fi
