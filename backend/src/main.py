@@ -26,11 +26,11 @@ from src.stt.ws_stt_live import router as stt_live_router
 from src.stt.ws_stt_live import get_model
 
 # ENABLE_LOGGING
-# from session_logger import SessionLogger
+from session_logger import SessionLogger
 
 
 # ENABLE_LOGGING
-# _server_logger: SessionLogger | None = None
+_server_logger: SessionLogger | None = None
 _server_logger = None
 
 
@@ -45,11 +45,11 @@ async def lifespan(app: FastAPI):
     startup_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # ENABLE_LOGGING
-    # _server_logger = SessionLogger(
-    #     session_label=f"Server_Session_{startup_ts}",
-    #     log_dir="logs"
-    # )
-    # _server_logger.start_session()
+    _server_logger = SessionLogger(
+        session_label=f"Server_Session_{startup_ts}",
+        log_dir="logs"
+    )
+    _server_logger.start_session()
 
     print("=" * 60)
     print("🚀 FSL Communication System — Server Started")
@@ -70,8 +70,8 @@ async def lifespan(app: FastAPI):
     shared_mic.stop()    # uncomment only if you actually use/start it here
 
     # ENABLE_LOGGING
-    # if _server_logger:
-    #     _server_logger.end_session()
+    if _server_logger:
+        _server_logger.end_session()
 
     print("✅ Shutdown complete.")
 
