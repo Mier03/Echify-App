@@ -31,11 +31,8 @@ pkill -f "camera_engine.py" 2>/dev/null
 pkill -x chromium 2>/dev/null
 pkill -f "$CHROME_PROFILE" 2>/dev/null
 
-sleep 3
+sleep 1
 
-echo "🧹 Cleaning old Chromium profile..."
-
-##
 echo "🎙️ Validating Microphone (Google VoiceHAT)..."
 
 # Check if VoiceHAT is on card 1 OR card 2
@@ -82,20 +79,33 @@ fi
 
 echo "🔨 Building Web UI..."
 cd "$BASE_DIR/mobile" || exit 1
-rm -rf "$BASE_DIR/mobile/dist"
-npx expo export -p web --clear
 
-if [ $? -ne 0 ]; then
-    echo "❌ Web build failed"
-    exit 1
+CURRENT_HASH=$(git -C "$BASE_DIR" rev-parse HEAD)
+LAST_BUILD_HASH=""  
+if [ -f "$BASE_DIR/.last_build_hash" ]; then
+    LAST_BUILD_HASH=$(cat "$BASE_DIR/.last_build_hash")
 fi
 
-if [ ! -f "$BASE_DIR/mobile/dist/index.html" ]; then
-    echo "❌ dist/index.html not found after build"
-    exit 1
-fi
+if [ ! -f "$BASE_DIR/mobile/dist/index.html" ] || [ "$CURRENT_HASH" != "$LAST_BUILD_HASH" ]; then
+    echo "📦 Code changed or no dist found, rebuilding..."
+    rm -rf "$BASE_DIR/mobile/dist"
+    npx expo export -p web --clear
 
-echo "✅ Web UI built successfully"
+    if [ $? -ne 0 ]; then
+        echo "❌ Web build failed"
+        exit 1
+    fi
+
+    if [ ! -f "$BASE_DIR/mobile/dist/index.html" ]; then
+        echo "❌ dist/index.html not found after build"
+        exit 1
+    fi
+
+    echo "$CURRENT_HASH" > "$BASE_DIR/.last_build_hash"
+    echo "✅ Web UI built successfully"
+else
+    echo "✅ No changes detected, skipping build."
+fi
 
 echo "🌐 Starting Web Server..."
 cd "$BASE_DIR/mobile/dist" || exit 1
@@ -117,7 +127,7 @@ cd "$BASE_DIR/hardware/camera" || exit 1
 "$BASE_DIR/venv/bin/python" camera_engine.py > "$BASE_DIR/camera.log" 2>&1 &
 CAMERA_PID=$!
 
-sleep 12
+sleep 5
 
 if ! kill -0 $CAMERA_PID 2>/dev/null; then
     echo "❌ Camera engine failed to start"
