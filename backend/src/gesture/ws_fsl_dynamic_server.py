@@ -14,6 +14,10 @@ Pi-ready improvements incorporated from ws_fsl_server.py:
 - rolling timing printouts
 - safer disconnect/error handling
 - full session cleanup/reset on disconnect
+
+Added:
+- SharedMic dBFS captured once per TTS trigger (ambient noise level)
+- TTS logged exactly once per finalized sentence with real latency
 """
 
 import sys
@@ -40,7 +44,16 @@ from src.gesture.fsl_dynamic_inference import (
     get_model_info,
 )
 from src.tts.tts_engine import speak
-from session_logger import SessionLogger
+from session_logger import SessionLogger, get_mic_dbfs
+
+# ── SharedMic — imported safely; server still works without audio hardware ─
+try:
+    from shared_mic import shared_mic
+    _MIC_AVAILABLE = True
+except Exception as _mic_err:
+    print(f"⚠️  SharedMic not available: {_mic_err}")
+    shared_mic     = None
+    _MIC_AVAILABLE = False
 
 router = APIRouter()
 
@@ -82,10 +95,19 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
         await websocket.close()
         return
 
-    # ── Start session logger Uncomment Later ───────────────────────────────────────────────
+    # ── Start SharedMic if not already running ─────────────────────────────
+    if _MIC_AVAILABLE and shared_mic is not None and not shared_mic.running:
+        try:
+            shared_mic.start()
+            print("✅ SharedMic started for dB measurement")
+        except Exception as e:
+            print(f"⚠️  SharedMic start failed: {e} — dB logging disabled")
+
+    # ── Start session logger ───────────────────────────────────────────────
     logger = SessionLogger(
         session_label=f"Dynamic_FSL_{session_ts}_{websocket.client.host}",
-        log_dir=str(_BACKEND_ROOT / "logs")
+        log_dir=str(_BACKEND_ROOT / "logs"),
+        shared_mic=shared_mic,   # None = dB columns stay empty, no crash
     )
     logger.start_session()
 
@@ -209,7 +231,7 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                 }
             }
 
-            # ── Feed pause into sentence builder every frame ────────────────
+            # ── Feed pause into sentence builder every frame ───────────────
             sentence_result = builder.update_pause(hands_now)
 
             # ── On completed gesture, log + feed token ─────────────────────
@@ -222,7 +244,6 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                     gesture_intervals.append((now_ts - last_gesture_time) * 1000)
                 last_gesture_time = now_ts
 
-                #Uncomment later
                 logger.log_gesture(
                     predicted_label=label,
                     confidence=conf,
@@ -230,7 +251,6 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                     inference_time_ms=inference_ms,
                     ground_truth=None,
                     notes=(
-                        f"server_frame_pending|"
                         f"frame_no={frame_count}|"
                         f"client={client_id}"
                     )
@@ -241,32 +261,43 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                 if token_result:
                     sentence_result = token_result
 
-            # ── Finalize sentence and speak on Pi ───────────────────────────
+            # ── Finalize sentence and speak on Pi ──────────────────────────
             if sentence_result:
                 raw, english = sentence_result
+
+                # Snapshot ambient dB BEFORE speaking
+                current_dbfs = get_mic_dbfs(shared_mic)
+
                 enriched["sentence_raw"] = raw
                 enriched["sentence_english"] = english
 
                 builder.reset()
 
                 ts = datetime.now().strftime("%H:%M:%S")
-                print(f"\n  💬 [{ts}] SENTENCE FINALIZED")
+                db_str = f" | {current_dbfs:.1f} dBFS" if current_dbfs is not None else ""
+                print(f"\n  💬 [{ts}] SENTENCE FINALIZED{db_str}")
                 print(f"       Signs   : {raw}")
                 print(f"       English : \"{english}\"")
                 print(f"       → Speaking through Pi speaker...\n")
 
+                # Measure time from speak() call until thread is dispatched
+                tts_latency_ms = 0.0
                 try:
+                    tts_t0 = time.monotonic()
                     speak(english)
-                    #Uncomment Later
-                    logger.log_tts(
-                        text=english,
-                        tts_latency_ms=inference_ms,
-                        notes=f"sentence_raw={raw}|frame_no={frame_count}"
-                    )
+                    tts_latency_ms = (time.monotonic() - tts_t0) * 1000
                 except Exception as e:
                     print(f"❌ TTS error: {e}")
 
-            # ── T3: send response ───────────────────────────────────────────
+                # Log TTS exactly ONCE per finalized sentence
+                logger.log_tts(
+                    text=english,
+                    tts_latency_ms=tts_latency_ms,
+                    dbfs=current_dbfs,
+                    notes=f"sentence_raw={raw}|frame_no={frame_count}"
+                )
+
+            # ── T3: send response ──────────────────────────────────────────
             await websocket.send_json(enriched)
             t3_sent = time.monotonic()
 
@@ -276,7 +307,7 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
             # add final timing after actual send
             enriched["debug"]["server_total_ms"] = round(total_server_ms, 1)
 
-            # ── Rolling print every 30 frames ───────────────────────────────
+            # ── Rolling print every 30 frames ──────────────────────────────
             if frame_count % 30 == 0:
                 avg_inf = sum(inference_latencies[-30:]) / min(30, len(inference_latencies))
                 avg_srv = sum(frame_latencies_ms[-30:]) / min(30, len(frame_latencies_ms))
@@ -304,8 +335,7 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
         # ── Cleanup/reset ──────────────────────────────────────────────────
         reset_buffer()
         builder.reset()
-        #Uncomment Later
-        logger.end_session() 
+        logger.end_session()
 
         if frame_latencies_ms:
             avg_inf = sum(inference_latencies) / len(inference_latencies) if inference_latencies else 0.0
