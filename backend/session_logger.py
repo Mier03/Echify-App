@@ -3,58 +3,67 @@ session_logger.py
 =================
 Comprehensive testing session logger for FSL Bidirectional Communication System.
 
-Records:
-  - Gesture recognition events (prediction, confidence, frames, latency)
-  - TTS events (text spoken, timestamp, latency, ambient dBFS)
-  - STT events (transcript, WER score, latency, ambient dBFS)
-  - SOS trigger events
-  - Full session summary (accuracy rate, avg latency, frame stats)
+ONE CSV FOR THE ENTIRE PI SESSION (boot → shutdown).
+─────────────────────────────────────────────────────
+The CSV is opened once when the server starts and is appended to for ALL
+subsequent WebSocket connections and flows:
 
-Output:
-  - logs/session_YYYYMMDD_HHMMSS.csv            (per-event log)
-  - logs/session_YYYYMMDD_HHMMSS_summary.json   (summary stats)
+  Flow A — Sign → TTS  : GESTURE + TTS rows  (ws_fsl_dynamic_server.py)
+  Flow B — STT         : STT rows             (ws_stt_live.py)
+  SOS                  : SOS rows             (main.py  /sos/trigger)
+
+Every WebSocket reconnect just appends rows to the SAME file.
+A RECONNECT marker row is written so you can slice sessions in post-processing.
+The CSV is closed and the summary JSON is written when the Pi process exits
+(via atexit) or when main.py calls global_logger.close() in the lifespan.
+
+Usage:
+    from session_logger import global_logger
+
+    global_logger.start()                          # called once in lifespan startup
+    global_logger.log_reconnect("Sign→TTS", cid)  # each WS connect
+    global_logger.log_gesture(...)
+    global_logger.log_tts(...)
+    global_logger.log_stt(...)
+    global_logger.log_sos(...)
+    global_logger.close()                          # called once in lifespan shutdown
 
 dB Notes:
   SharedMic._audio_callback computes RMS on a boosted+clipped mono signal.
-  We convert:  dBFS = 20 * log10(max(rms, 1e-5))   floored at -100 dBFS
+  dBFS = 20 * log10(max(rms, 1e-5)),  floored at -100 dBFS.
     0 dBFS  = loudest possible (clipping)
   -20 dBFS  = typical speech in a quiet room
   -60 dBFS  = near silence
-  Pass shared_mic=None to disable dB (fields stay empty in CSV).
 """
 
 import csv
 import json
 import math
 import time
+import atexit
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
 from typing import Optional
 
-# ── Optional: WER calculation (install with: pip install jiwer) ───────────────
+# ── Optional: WER ─────────────────────────────────────────────────────────────
 try:
     from jiwer import wer as compute_wer
     WER_AVAILABLE = True
 except ImportError:
     WER_AVAILABLE = False
-    print("⚠️  jiwer not installed. WER calculation disabled. Run: pip install jiwer")
+    print("⚠️  jiwer not installed — WER disabled. Run: pip install jiwer")
 
 
-# ── dB helpers ────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# dB helpers  (also imported by server files)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def rms_to_dbfs(rms: float) -> float:
     """
-    Convert linear RMS amplitude → dBFS (decibels relative to full scale).
-
-    SharedMic clips audio to [-1.0, 1.0], so 1.0 RMS = 0 dBFS.
-    Typical speech in a quiet room: -30 to -20 dBFS.
-    Near-silence floors at -100 dBFS.
-
-    Args:
-        rms: Linear RMS value from SharedMic.get_level()  (range 0.0 – 1.0)
-    Returns:
-        dBFS float, max -100.0
+    Convert SharedMic linear RMS → dBFS (decibels relative to full scale).
+    SharedMic clips audio to [-1, 1], so 1.0 RMS = 0 dBFS (max).
+    Floored at -100 dBFS.
     """
     dbfs = 20.0 * math.log10(max(rms, 1e-5))
     return round(max(dbfs, -100.0), 2)
@@ -62,63 +71,35 @@ def rms_to_dbfs(rms: float) -> float:
 
 def get_mic_dbfs(shared_mic) -> Optional[float]:
     """
-    Read current RMS from a SharedMic instance and return dBFS.
-    Returns None silently if shared_mic is None or unavailable.
+    Read current dBFS from a SharedMic instance.
+    Returns None silently if mic is None or unavailable.
     """
     if shared_mic is None:
         return None
     try:
-        rms = shared_mic.get_level()
-        return rms_to_dbfs(rms)
+        return rms_to_dbfs(shared_mic.get_level())
     except Exception:
         return None
 
 
-# ── SessionLogger ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# SessionLogger
+# ─────────────────────────────────────────────────────────────────────────────
 
 class SessionLogger:
     """
-    Drop-in logger for FSL testing sessions.
+    Persistent logger — ONE CSV file for the Pi's entire runtime.
 
-    Two session flows in ONE CSV per WebSocket connection:
-
-      Flow A — Sign → TTS:
-        logger.log_gesture(...)   ← each recognized FSL sign
-        logger.log_tts(...)       ← finalized sentence spoken by espeak
-
-      Flow B — STT:
-        logger.log_stt(...)       ← Whisper transcript result
-
-    Usage:
-        from shared_mic import shared_mic          # optional, for dBFS
-
-        logger = SessionLogger(
-            session_label="Test_Run_1",
-            shared_mic=shared_mic,                 # or None to disable dB
-        )
-        logger.start_session()
-
-        logger.log_gesture("HELLO", confidence=0.97, frames_collected=28,
-                           inference_time_ms=42.3, ground_truth="HELLO")
-
-        logger.log_tts(text="Hello!", tts_latency_ms=310.5)
-
-        logger.log_stt(transcript="Good morning",
-                       reference="Good morning",
-                       stt_latency_ms=520.0,
-                       environment="quiet")
-
-        logger.log_sos(response_time_ms=85.2, state="idle")
-
-        logger.end_session()
+    All WebSocket connections (Sign→TTS and STT) share the same instance
+    via the module-level `global_logger` singleton at the bottom of this file.
     """
 
-    # Event type constants
-    EVENT_GESTURE = "GESTURE"
-    EVENT_TTS     = "TTS"
-    EVENT_STT     = "STT"
-    EVENT_SOS     = "SOS"
-    EVENT_SESSION = "SESSION"
+    EVENT_GESTURE   = "GESTURE"
+    EVENT_TTS       = "TTS"
+    EVENT_STT       = "STT"
+    EVENT_SOS       = "SOS"
+    EVENT_SESSION   = "SESSION"
+    EVENT_RECONNECT = "RECONNECT"
 
     CSV_FIELDS = [
         "event_id",
@@ -126,7 +107,7 @@ class SessionLogger:
         "timestamp",
         "datetime",
 
-        # Gesture fields
+        # Sign → TTS flow
         "predicted_label",
         "ground_truth",
         "is_correct",
@@ -134,70 +115,68 @@ class SessionLogger:
         "frames_collected",
         "inference_time_ms",
 
-        # TTS fields
+        # TTS
         "tts_text",
         "tts_latency_ms",
-        "tts_dbfs",          # ← NEW: ambient dBFS at TTS trigger
+        "tts_dbfs",
 
-        # STT fields
+        # STT flow
         "stt_transcript",
         "stt_reference",
         "stt_wer",
         "stt_latency_ms",
         "stt_environment",
-        "stt_dbfs",          # ← NEW: ambient dBFS during STT recording
+        "stt_dbfs",
 
-        # SOS fields
+        # SOS
         "sos_state",
         "sos_response_time_ms",
         "sos_success",
 
-        # Notes
+        # Generic
         "notes",
     ]
 
-    def __init__(
-        self,
-        session_label: str = "",
-        log_dir: str = "logs",
-        shared_mic=None,          # SharedMic instance — pass None to disable dB
-    ):
-        self.session_label = session_label or "session"
-        self.log_dir       = Path(log_dir)
+    def __init__(self, log_dir: str = "logs", shared_mic=None):
+        self.log_dir    = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.shared_mic    = shared_mic
+        self.shared_mic = shared_mic
 
-        self._session_ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self._csv_path     = self.log_dir / f"session_{self._session_ts}.csv"
-        self._summary_path = self.log_dir / f"session_{self._session_ts}_summary.json"
+        # Filename is fixed at boot — never changes across reconnects
+        boot_ts            = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._csv_path     = self.log_dir / f"session_{boot_ts}.csv"
+        self._summary_path = self.log_dir / f"session_{boot_ts}_summary.json"
 
         self._lock          = Lock()
         self._event_counter = 0
+        self._started       = False
+        self._closed        = False
+        self._boot_time     = time.monotonic()
 
-        # Session-level aggregates
-        self._session_start: float = 0.0
-        self._session_end:   float = 0.0
-
-        # Gesture stats
+        # Aggregates — accumulate across ALL connections for the full summary
         self._gesture_events: list = []
-
-        # TTS stats
-        self._tts_events: list = []   # {text, latency_ms, dbfs}
-
-        # STT stats
-        self._stt_events: list = []
-
-        # SOS stats
-        self._sos_events: list = []
+        self._tts_events:     list = []
+        self._stt_events:     list = []
+        self._sos_events:     list = []
 
         self._csv_file   = None
         self._csv_writer = None
 
-    # ── Session lifecycle ─────────────────────────────────────────────────────
+        # Auto-close on Python exit so summary is always written
+        atexit.register(self.close)
 
-    def start_session(self):
-        """Call once at the beginning of a test session."""
-        self._session_start = time.monotonic()
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    def start(self):
+        """
+        Open the CSV and write the BOOT row.
+        Idempotent — safe to call multiple times (only opens once).
+        Called once from main.py lifespan startup.
+        """
+        if self._started:
+            return
+        self._started = True
+
         self._csv_file   = open(self._csv_path, "w", newline="", encoding="utf-8")
         self._csv_writer = csv.DictWriter(self._csv_file, fieldnames=self.CSV_FIELDS)
         self._csv_writer.writeheader()
@@ -205,37 +184,64 @@ class SessionLogger:
 
         mic_status = "enabled" if self.shared_mic is not None else "disabled"
         print(f"\n{'='*60}")
-        print(f"📋 SESSION LOGGER STARTED")
-        print(f"   Label    : {self.session_label}")
-        print(f"   CSV Log  : {self._csv_path}")
-        print(f"   Summary  : {self._summary_path}")
-        print(f"   Mic dB   : {mic_status}")
+        print(f"📋 SESSION LOGGER STARTED  (one CSV for entire Pi session)")
+        print(f"   CSV     : {self._csv_path}")
+        print(f"   Summary : {self._summary_path}")
+        print(f"   Mic dB  : {mic_status}")
         print(f"{'='*60}\n")
 
         self._write_row({
             "event_type": self.EVENT_SESSION,
-            "notes": f"SESSION_START label={self.session_label} mic_db={mic_status}",
+            "notes": f"BOOT mic_db={mic_status}",
         })
 
-    def end_session(self):
-        """Call once at the end. Saves summary JSON and closes CSV."""
-        self._session_end  = time.monotonic()
-        total_duration     = self._session_end - self._session_start
+    def log_reconnect(self, flow: str, client_id: str = ""):
+        """
+        Write a RECONNECT marker row when a new WebSocket connection arrives.
+        Lets you slice the CSV into individual connections in post-processing.
+
+        Args:
+            flow      : "Sign→TTS" or "STT"
+            client_id : e.g. "192.168.1.5:50123"
+        """
+        self._ensure_started()
+        self._write_row({
+            "event_type": self.EVENT_RECONNECT,
+            "notes": f"RECONNECT flow={flow} client={client_id}",
+        })
+        print(f"[LOGGER] 🔗 Reconnect — flow={flow} client={client_id}")
+
+    def close(self):
+        """
+        Finalize the CSV: write SHUTDOWN row, close file, write summary JSON.
+        Called from main.py lifespan shutdown OR automatically via atexit.
+        Safe to call multiple times.
+        """
+        if self._closed or not self._started:
+            return
+        self._closed = True
+
+        total_uptime = time.monotonic() - self._boot_time
 
         self._write_row({
             "event_type": self.EVENT_SESSION,
-            "notes": f"SESSION_END duration={total_duration:.2f}s",
+            "notes": f"SHUTDOWN total_uptime={total_uptime:.2f}s",
         })
 
         if self._csv_file:
             self._csv_file.close()
 
-        summary = self._build_summary(total_duration)
+        summary = self._build_summary(total_uptime)
         with open(self._summary_path, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2)
 
         self._print_summary(summary)
         return summary
+
+    def _ensure_started(self):
+        """Auto-start on first log call if start() wasn't called explicitly."""
+        if not self._started:
+            self.start()
 
     # ── Logging methods ───────────────────────────────────────────────────────
 
@@ -248,17 +254,9 @@ class SessionLogger:
         ground_truth: str = None,
         notes: str = "",
     ):
-        """
-        Log a single gesture recognition event.
+        """Log a single FSL gesture recognition event (Sign → TTS flow)."""
+        self._ensure_started()
 
-        Args:
-            predicted_label   : What the model predicted (e.g. "HELLO")
-            confidence        : Model confidence 0.0–1.0
-            frames_collected  : How many frames were in the gesture segment
-            inference_time_ms : Time from segment end → prediction ready (ms)
-            ground_truth      : The correct label if known (for accuracy tracking)
-            notes             : Any extra notes
-        """
         is_correct = None
         if ground_truth is not None:
             is_correct = (
@@ -303,16 +301,16 @@ class SessionLogger:
         notes: str = "",
     ):
         """
-        Log a TTS output event.
+        Log a TTS output event (Sign → TTS flow).
 
         Args:
-            text           : Text that was spoken
-            tts_latency_ms : Time from TTS call → audio started (ms)
-            dbfs           : Ambient dBFS at trigger time.
-                             Pass None to auto-read from self.shared_mic.
-                             Pass an explicit float if you already captured it.
-            notes          : Any extra notes
+            text           : Text spoken by espeak
+            tts_latency_ms : TTS call → thread dispatched (ms)
+            dbfs           : Ambient dBFS. None = auto-read from shared_mic.
+            notes          : Free-text notes
         """
+        self._ensure_started()
+
         if dbfs is None:
             dbfs = get_mic_dbfs(self.shared_mic)
 
@@ -346,17 +344,18 @@ class SessionLogger:
         notes: str = "",
     ):
         """
-        Log a Speech-to-Text result.
+        Log a Speech-to-Text result (STT flow).
 
         Args:
-            transcript      : What the STT engine returned
-            stt_latency_ms  : Time from speech end → text displayed (ms)
-            reference       : Ground truth script (for WER calculation)
+            transcript      : Whisper output text
+            stt_latency_ms  : Transcription time (ms)
+            reference       : Ground-truth text for WER (optional)
             environment     : "quiet" or "noisy"
-            dbfs            : dBFS measured during recording.
-                              Pass None to auto-read from self.shared_mic.
-            notes           : Any extra notes
+            dbfs            : dBFS during recording. None = auto-read from mic.
+            notes           : Free-text notes
         """
+        self._ensure_started()
+
         wer_score = None
         if reference and WER_AVAILABLE:
             try:
@@ -407,15 +406,9 @@ class SessionLogger:
         success: bool = True,
         notes: str = "",
     ):
-        """
-        Log an SOS button press event.
+        """Log an SOS button press event."""
+        self._ensure_started()
 
-        Args:
-            response_time_ms : Time from button press → audio output starts (ms)
-            state            : "idle" or "active" (was system busy?)
-            success          : Did it successfully trigger?
-            notes            : Any extra notes
-        """
         row = {
             "event_type":           self.EVENT_SOS,
             "sos_state":            state,
@@ -437,7 +430,7 @@ class SessionLogger:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _write_row(self, data: dict):
-        """Write a single event row to the CSV."""
+        """Thread-safe CSV row write with auto-flush."""
         with self._lock:
             self._event_counter += 1
             now  = time.time()
@@ -471,25 +464,21 @@ class SessionLogger:
         idx = int(len(s) * 0.95)
         return s[min(idx, len(s) - 1)]
 
-    def _build_summary(self, total_duration: float) -> dict:
+    def _build_summary(self, total_uptime: float) -> dict:
 
-        # ── Gesture stats ─────────────────────────────────────────────────
-        total_gestures = len(self._gesture_events)
-        with_truth     = [e for e in self._gesture_events if e["is_correct"] is not None]
-        correct        = [e for e in with_truth if e["is_correct"]]
-        accuracy       = len(correct) / len(with_truth) if with_truth else None
-
+        # ── Gesture ──────────────────────────────────────────────────────
+        with_truth  = [e for e in self._gesture_events if e["is_correct"] is not None]
+        correct     = [e for e in with_truth if e["is_correct"]]
+        accuracy    = len(correct) / len(with_truth) if with_truth else None
         inf_times   = [e["inference_ms"] for e in self._gesture_events]
         confidences = [e["confidence"]   for e in self._gesture_events]
         frames_list = [e["frames"]       for e in self._gesture_events]
 
         gesture_summary = {
-            "total_predictions":    total_gestures,
+            "total_predictions":    len(self._gesture_events),
             "evaluated_with_truth": len(with_truth),
             "correct":              len(correct),
-            "accuracy_percent": (
-                round(accuracy * 100, 2) if accuracy is not None else "N/A"
-            ),
+            "accuracy_percent":     round(accuracy * 100, 2) if accuracy is not None else "N/A",
             "inference_latency_ms": {
                 "mean":   round(self._safe_avg(inf_times), 2),
                 "median": round(self._safe_median(inf_times), 2),
@@ -509,7 +498,7 @@ class SessionLogger:
             },
         }
 
-        # ── TTS stats ─────────────────────────────────────────────────────
+        # ── TTS ──────────────────────────────────────────────────────────
         tts_lats = [e["latency_ms"] for e in self._tts_events]
         tts_dbs  = [e["dbfs"] for e in self._tts_events if e["dbfs"] is not None]
 
@@ -527,11 +516,11 @@ class SessionLogger:
             },
         }
 
-        # ── STT stats ─────────────────────────────────────────────────────
-        quiet_events = [e for e in self._stt_events if e["environment"] == "quiet"]
-        noisy_events = [e for e in self._stt_events if e["environment"] == "noisy"]
+        # ── STT ──────────────────────────────────────────────────────────
+        quiet_ev = [e for e in self._stt_events if e["environment"] == "quiet"]
+        noisy_ev = [e for e in self._stt_events if e["environment"] == "noisy"]
 
-        def wer_stats(events):
+        def _wer_stats(events):
             wers = [e["wer"]        for e in events if e["wer"]  is not None]
             lats = [e["latency_ms"] for e in events]
             dbs  = [e["dbfs"]       for e in events if e["dbfs"] is not None]
@@ -546,19 +535,19 @@ class SessionLogger:
 
         stt_summary = {
             "total_stt_events": len(self._stt_events),
-            "quiet": wer_stats(quiet_events),
-            "noisy": wer_stats(noisy_events),
+            "quiet": _wer_stats(quiet_ev),
+            "noisy": _wer_stats(noisy_ev),
         }
 
-        # ── SOS stats ─────────────────────────────────────────────────────
+        # ── SOS ──────────────────────────────────────────────────────────
         sos_pass   = [e for e in self._sos_events if e["success"]]
         sos_idle   = [e for e in self._sos_events if e["state"] == "idle"]
         sos_active = [e for e in self._sos_events if e["state"] == "active"]
         sos_times  = [e["response_ms"] for e in self._sos_events]
 
         sos_summary = {
-            "total_trials": len(self._sos_events),
-            "passed":       len(sos_pass),
+            "total_trials":         len(self._sos_events),
+            "passed":               len(sos_pass),
             "success_rate_percent": (
                 round(len(sos_pass) / len(self._sos_events) * 100, 2)
                 if self._sos_events else "N/A"
@@ -574,15 +563,12 @@ class SessionLogger:
 
         return {
             "session_info": {
-                "label":          self.session_label,
-                "session_id":     self._session_ts,
-                "csv_log":        str(self._csv_path),
-                "duration_sec":   round(total_duration, 2),
-                "started_at":     datetime.fromtimestamp(
-                    time.time() - total_duration
-                ).strftime("%Y-%m-%d %H:%M:%S"),
-                "ended_at":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "mic_db_enabled": self.shared_mic is not None,
+                "csv_log":          str(self._csv_path),
+                "summary_path":     str(self._summary_path),
+                "total_uptime_sec": round(total_uptime, 2),
+                "ended_at":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "mic_db_enabled":   self.shared_mic is not None,
+                "total_events":     self._event_counter,
             },
             "gesture_recognition": gesture_summary,
             "text_to_speech":      tts_summary,
@@ -597,12 +583,13 @@ class SessionLogger:
         o = summary["sos_feature"]
 
         print(f"\n{'='*60}")
-        print(f"📊 SESSION SUMMARY — {summary['session_info']['label']}")
+        print(f"📊 FINAL SESSION SUMMARY")
         print(f"{'='*60}")
-        print(f"  Duration  : {summary['session_info']['duration_sec']}s")
-        print(f"  Mic dB    : {'enabled' if summary['session_info']['mic_db_enabled'] else 'disabled'}")
+        print(f"  Total uptime  : {summary['session_info']['total_uptime_sec']}s")
+        print(f"  Total events  : {summary['session_info']['total_events']}")
+        print(f"  Mic dB        : {'enabled' if summary['session_info']['mic_db_enabled'] else 'disabled'}")
 
-        print(f"\n  🤟 Gesture Recognition")
+        print(f"\n  🤟 Gesture Recognition  [Sign → TTS]")
         print(f"     Total predictions : {g['total_predictions']}")
         print(f"     Accuracy          : {g['accuracy_percent']}%")
         print(f"     Avg inference     : {g['inference_latency_ms']['mean']}ms")
@@ -616,7 +603,7 @@ class SessionLogger:
         if t["ambient_dbfs"]["mean"] != "N/A":
             print(f"     Avg ambient : {t['ambient_dbfs']['mean']} dBFS")
 
-        print(f"\n  🎙️  STT")
+        print(f"\n  🎙️  STT  [Speech → Text]")
         print(f"     Events      : {s['total_stt_events']}")
         if s["quiet"]["count"] > 0:
             db_str = (
@@ -636,7 +623,18 @@ class SessionLogger:
         print(f"     Success rate  : {o['success_rate_percent']}%")
         print(f"     Avg response  : {o['response_time_ms']['mean']}ms")
 
-        print(f"\n  📁 Saved to:")
+        print(f"\n  📁 Files saved:")
         print(f"     {self._csv_path}")
         print(f"     {self._summary_path}")
         print(f"{'='*60}\n")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Global singleton — import this in ALL server files
+# ─────────────────────────────────────────────────────────────────────────────
+
+# SharedMic is wired in by main.py after it imports shared_mic itself.
+# We create the singleton without a mic here; main.py assigns it via
+# global_logger.shared_mic = shared_mic  before calling global_logger.start()
+
+global_logger = SessionLogger(log_dir="logs", shared_mic=None)
