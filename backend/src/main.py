@@ -127,13 +127,13 @@ async def sos_trigger(request: Request):
     print(f"  {'─'*50}\n")
 
     # ENABLE_LOGGING
-    # if logger:
-    #     logger.log_sos(
-    #         response_time_ms=response_time_ms,
-    #         state=state,
-    #         success=success,
-    #         notes=f"client_id={client_id}|server_receive_ms={server_receive_ms:.2f}"
-    #     )
+    if logger:
+        logger.log_sos(
+            response_time_ms=response_time_ms,
+            state=state,
+            success=success,
+            notes=f"client_id={client_id}|server_receive_ms={server_receive_ms:.2f}"
+        )
 
     return JSONResponse(content={
         "logged": False,
@@ -182,8 +182,8 @@ async def session_summary():
             "avg_response": avg([e["response_ms"] for e in o_events]),
         },
         # ENABLE_LOGGING
-        # "csv_path": str(logger._csv_path),
-        # "summary_path": str(logger._summary_path),
+        "csv_path": str(logger._csv_path),
+        "summary_path": str(logger._summary_path),
     })
 
 
