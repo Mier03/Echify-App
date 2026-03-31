@@ -59,8 +59,8 @@ fi
 echo "✅ VoiceHAT detected on card $MIC_CARD"
 
 # Wake up the ALSA stream on the detected card
-arecord -D plughw:${MIC_CARD},0 -r 48000 -c 2 -f S32_LE -d 2 /tmp/startup_mic_test.wav > /dev/null 2>&1
-sox /tmp/startup_mic_test.wav /tmp/startup_mono.wav remix 1 gain 5 > /dev/null 2>&1
+arecord -D plughw:${MIC_CARD},0 -r 44100 -c 2 -f S32_LE -d 2 /tmp/startup_mic_test.wav > /dev/null 2>&1
+sox /tmp/startup_mic_test.wav /tmp/startup_mono.wav remix 1 > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✅ Microphone hardware initialized on card $MIC_CARD"
