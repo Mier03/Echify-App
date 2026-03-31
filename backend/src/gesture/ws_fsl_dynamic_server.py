@@ -3,13 +3,21 @@ ws_fsl_dynamic_server.py
 ========================
 Dynamic FSL Gesture Recognition — WebSocket Server for Raspberry Pi 5
 
-Logs into the global single CSV via global_logger (session_logger.py).
-Every reconnect appends to the same file — no new CSV is ever created.
+Pi-ready improvements incorporated from ws_fsl_server.py:
+- safer data URL stripping before frame decode
+- consistent timing measurement:
+    T1 = frame received
+    T2 = inference done
+    T3 = response sent
+- total server latency includes websocket send time
+- per-frame inference timing accumulation
+- rolling timing printouts
+- safer disconnect/error handling
+- full session cleanup/reset on disconnect
 
-Timing:
-  T1 = frame received
-  T2 = inference done
-  T3 = response sent
+Added:
+- SharedMic dBFS captured once per TTS trigger (ambient noise level)
+- TTS logged exactly once per finalized sentence with real latency
 """
 
 import sys
@@ -22,12 +30,12 @@ import cv2
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-# ── sys.path fix FIRST ────────────────────────────────────────────────────
+# ── sys.path fix FIRST — before any local imports ─────────────────────────
 _BACKEND_ROOT = Path(__file__).parent.parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-# ── Local imports ─────────────────────────────────────────────────────────
+# ── Local imports AFTER path fix ──────────────────────────────────────────
 from src.gesture.sentence_builder import SentenceBuilder
 from src.gesture.fsl_dynamic_inference import (
     initialize_dynamic_model,
@@ -36,11 +44,11 @@ from src.gesture.fsl_dynamic_inference import (
     get_model_info,
 )
 from src.tts.tts_engine import speak
-from session_logger import global_logger, get_mic_dbfs
+from session_logger import SessionLogger, get_mic_dbfs
 
-# ── SharedMic — safe import ───────────────────────────────────────────────
+# ── SharedMic — imported safely; server still works without audio hardware ─
 try:
-    from src.audio.shared_mic import shared_mic
+    from shared_mic import shared_mic
     _MIC_AVAILABLE = True
 except Exception as _mic_err:
     print(f"⚠️  SharedMic not available: {_mic_err}")
@@ -74,7 +82,7 @@ def _decode_frame(frame_b64: str):
 async def fsl_dynamic_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    client_id  = f"{websocket.client.host}:{websocket.client.port}"
+    client_id = f"{websocket.client.host}:{websocket.client.port}"
     session_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     print(f"\n📱 [DYNAMIC] Client connected: {client_id}")
 
@@ -87,17 +95,30 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
         await websocket.close()
         return
 
-    # ── Mark this connection in the global CSV ─────────────────────────────
-    global_logger.log_reconnect("Sign→TTS", client_id)
+    # ── Start SharedMic if not already running ─────────────────────────────
+    if _MIC_AVAILABLE and shared_mic is not None and not shared_mic.running:
+        try:
+            shared_mic.start()
+            print("✅ SharedMic started for dB measurement")
+        except Exception as e:
+            print(f"⚠️  SharedMic start failed: {e} — dB logging disabled")
 
-    # ── Per-connection state ───────────────────────────────────────────────
+    # ── Start session logger ───────────────────────────────────────────────
+    logger = SessionLogger(
+        session_label=f"Dynamic_FSL_{session_ts}_{websocket.client.host}",
+        log_dir=str(_BACKEND_ROOT / "logs"),
+        shared_mic=shared_mic,   # None = dB columns stay empty, no crash
+    )
+    logger.start_session()
+
+    # ── Per-session state ──────────────────────────────────────────────────
     builder = SentenceBuilder()
     frame_count = 0
 
-    frame_latencies_ms  = []
-    inference_latencies = []
-    gesture_intervals   = []
-    last_gesture_time   = None
+    frame_latencies_ms = []      # full server time per frame
+    inference_latencies = []     # pure model/update time per frame
+    gesture_intervals = []       # time between recognized gestures
+    last_gesture_time = None
     last_printed_status = None
 
     print("\n" + "=" * 55)
@@ -110,7 +131,7 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
         while True:
             # ── T1: frame received ─────────────────────────────────────────
             t1_received = time.monotonic()
-            frame_b64   = await websocket.receive_text()
+            frame_b64 = await websocket.receive_text()
             frame_count += 1
 
             if frame_count <= 5 or frame_count % 30 == 0:
@@ -142,20 +163,20 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
 
             # ── T2: inference/update ───────────────────────────────────────
             t2_infer_start = time.monotonic()
-            result         = update_and_maybe_predict(frame)
-            t2_infer_end   = time.monotonic()
+            result = update_and_maybe_predict(frame)
+            t2_infer_end = time.monotonic()
 
             inference_ms = (t2_infer_end - t2_infer_start) * 1000
             inference_latencies.append(inference_ms)
 
-            dbg           = result.get("debug", {})
-            collecting    = bool(dbg.get("collecting", False))
+            dbg = result.get("debug", {})
+            collecting = bool(dbg.get("collecting", False))
             frames_in_seg = int(dbg.get("frames_collected", 0))
-            consec_hand   = int(dbg.get("consec_hand", 0))
+            consec_hand = int(dbg.get("consec_hand", 0))
             consec_nohand = int(dbg.get("consec_nohand", 0))
-            is_ready      = bool(result.get("is_ready", False))
-            top1_label    = result.get("top1_label", "Waiting...")
-            hands_now     = consec_hand > 0
+            is_ready = bool(result.get("is_ready", False))
+            top1_label = result.get("top1_label", "Waiting...")
+            hands_now = consec_hand > 0
 
             if frame_count <= 5 or frame_count % 30 == 0:
                 print(
@@ -216,20 +237,23 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
             # ── On completed gesture, log + feed token ─────────────────────
             if is_ready:
                 label = result.get("top1_label", "UNKNOWN")
-                conf  = result.get("top1_conf", 0.0)
+                conf = result.get("top1_conf", 0.0)
 
                 now_ts = time.monotonic()
                 if last_gesture_time is not None:
                     gesture_intervals.append((now_ts - last_gesture_time) * 1000)
                 last_gesture_time = now_ts
 
-                global_logger.log_gesture(
+                logger.log_gesture(
                     predicted_label=label,
                     confidence=conf,
                     frames_collected=frames_in_seg,
                     inference_time_ms=inference_ms,
                     ground_truth=None,
-                    notes=f"frame_no={frame_count}|client={client_id}"
+                    notes=(
+                        f"frame_no={frame_count}|"
+                        f"client={client_id}"
+                    )
                 )
 
                 # add_token may finalize immediately if max tokens reached
@@ -244,19 +268,19 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                 # Snapshot ambient dB BEFORE speaking
                 current_dbfs = get_mic_dbfs(shared_mic)
 
-                enriched["sentence_raw"]     = raw
+                enriched["sentence_raw"] = raw
                 enriched["sentence_english"] = english
 
                 builder.reset()
 
-                ts     = datetime.now().strftime("%H:%M:%S")
+                ts = datetime.now().strftime("%H:%M:%S")
                 db_str = f" | {current_dbfs:.1f} dBFS" if current_dbfs is not None else ""
                 print(f"\n  💬 [{ts}] SENTENCE FINALIZED{db_str}")
                 print(f"       Signs   : {raw}")
                 print(f"       English : \"{english}\"")
                 print(f"       → Speaking through Pi speaker...\n")
 
-                # Measure TTS thread dispatch latency
+                # Measure time from speak() call until thread is dispatched
                 tts_latency_ms = 0.0
                 try:
                     tts_t0 = time.monotonic()
@@ -266,7 +290,7 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
                     print(f"❌ TTS error: {e}")
 
                 # Log TTS exactly ONCE per finalized sentence
-                global_logger.log_tts(
+                logger.log_tts(
                     text=english,
                     tts_latency_ms=tts_latency_ms,
                     dbfs=current_dbfs,
@@ -279,6 +303,8 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
 
             total_server_ms = (t3_sent - t1_received) * 1000
             frame_latencies_ms.append(total_server_ms)
+
+            # add final timing after actual send
             enriched["debug"]["server_total_ms"] = round(total_server_ms, 1)
 
             # ── Rolling print every 30 frames ──────────────────────────────
@@ -306,10 +332,10 @@ async def fsl_dynamic_endpoint(websocket: WebSocket):
             pass
 
     finally:
-        # Reset per-connection state only.
-        # Do NOT close global_logger — it stays open for the next reconnect.
+        # ── Cleanup/reset ──────────────────────────────────────────────────
         reset_buffer()
         builder.reset()
+        logger.end_session()
 
         if frame_latencies_ms:
             avg_inf = sum(inference_latencies) / len(inference_latencies) if inference_latencies else 0.0
