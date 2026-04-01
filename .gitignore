@@ -1,2 +1,6 @@
 /node_modules
 *.ts
+/backend/__pycache__
+/backend/src/audio/__pycache__
+*.pyc
+/venv

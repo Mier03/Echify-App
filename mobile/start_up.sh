@@ -40,18 +40,23 @@ echo "🎙️ Validating Microphone (Google VoiceHAT)..."
 
 # Check if VoiceHAT is on card 1 OR card 2
 MIC_CARD=""
-if arecord -l | grep -q "card 2.*voicehat\|voicehat.*card 2" 2>/dev/null; then
-    MIC_CARD="2"
+if arecord -l | grep -q "card 0.*voicehat\|voicehat.*card 0" 2>/dev/null; then
+    MIC_CARD="0"
 elif arecord -l | grep -q "card 1.*voicehat\|voicehat.*card 1" 2>/dev/null; then
+    MIC_CARD="1"
+elif arecord -l | grep -q "card 2.*voicehat\|voicehat.*card 2" 2>/dev/null; then
+    MIC_CARD="2"
+elif arecord -l | grep -q "card 0"; then
+    MIC_CARD="0"
+elif arecord -l | grep -q "card 1"; then
     MIC_CARD="1"
 elif arecord -l | grep -q "card 2"; then
     MIC_CARD="2"
-elif arecord -l | grep -q "card 1"; then
-    MIC_CARD="1"
 fi
 
+
 if [ -z "$MIC_CARD" ]; then
-    echo "❌ ERROR: Google VoiceHAT NOT detected on card 1 or card 2!"
+    echo "❌ ERROR: Google VoiceHAT NOT detected on card 0, 1 or 2!"
     echo "Check physical connection on the 40-pin header."
     exit 1
 fi
