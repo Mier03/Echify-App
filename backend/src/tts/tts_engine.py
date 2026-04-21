@@ -1,3 +1,4 @@
+# tts_engine.py
 import subprocess
 import threading
 
@@ -9,10 +10,20 @@ def speak(text: str):
     def _run():
         try:
             print(f"🔊 Speaking: {text}")
+
+            # Generate WAV stream from espeak
+            espeak = subprocess.Popen(
+                ["espeak", "-a", "80", "--stdout", text],
+                stdout=subprocess.PIPE
+            )
+
+            # Play it correctly using ALSA (let aplay auto-detect WAV format)
             subprocess.run(
-                ["espeak", text],
+                ["aplay", "-D", "plug:hw:2,0"],
+                stdin=espeak.stdout,
                 check=False
             )
+
         except Exception as e:
             print(f"❌ TTS error: {e}")
 
@@ -27,10 +38,12 @@ class EmergencyAudio:
         def _run():
             try:
                 print(f"🔊 Playing emergency audio: {self.wav_path}")
+
                 subprocess.run(
-                    ["aplay", self.wav_path],
+                    ["aplay", "-D", "plug:hw:2,0", self.wav_path],
                     check=False
                 )
+
             except Exception as e:
                 print(f"❌ Emergency audio error: {e}")
 
