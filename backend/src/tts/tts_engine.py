@@ -13,7 +13,7 @@ def speak(text: str):
 
             # Generate WAV stream from espeak
             espeak = subprocess.Popen(
-                ["espeak", "-a", "80", "--stdout", text],
+               ["espeak", "-a", "200", "-s", "150", "--stdout", text],
                 stdout=subprocess.PIPE
             )
 
