@@ -88,10 +88,7 @@ class SentenceBuilder:
         if token in self.ignore_tokens:
             return None
 
-        if self.tokens and self.tokens[-1] == token:
-            self.last_token_time = now
-            return None
-
+        # Allow repeated consecutive tokens
         self.tokens.append(token)
         self.last_token_time = now
 
