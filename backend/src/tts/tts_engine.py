@@ -19,7 +19,7 @@ def speak(text: str):
 
             # Play it correctly using ALSA (let aplay auto-detect WAV format)
             subprocess.run(
-                ["aplay", "-D", "plughw:2,0"],
+                ["aplay", "-D", "default"],
                 stdin=espeak.stdout,
                 check=False
             )
@@ -31,7 +31,7 @@ def speak(text: str):
 
 
 class EmergencyAudio:
-    def __init__(self, wav_path="/home/sms/Echify-App/assets/help_me.wav"):
+    def __init__(self, wav_path="/home/sms/Echify-App/assets/help.wav"):
         self.wav_path = wav_path
 
     def play_help_instant(self):
@@ -40,7 +40,7 @@ class EmergencyAudio:
                 print(f"🔊 Playing emergency audio: {self.wav_path}")
 
                 subprocess.run(
-                    ["aplay", "-D", "plughw:2,0", self.wav_path],
+                    ["aplay", "-D", "default", self.wav_path],
                     check=False
                 )
 

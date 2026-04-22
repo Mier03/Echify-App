@@ -3,8 +3,8 @@ import os
 import threading
 
 class EmergencyAudio:
-    def __init__(self, mp3_name="help_me.mp3"):
-        self.mp3_path = "/home/sms/Echify-App/hardware/button/help_me.mp3"
+    def __init__(self, mp3_name="help.mp3"):
+        self.mp3_path = "/home/sms/Echify-App/hardware/button/help.mp3"
         self.mixer_ready = False
         
         # Initialize pygame safely inside the class
