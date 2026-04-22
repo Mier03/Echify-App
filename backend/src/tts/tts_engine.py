@@ -19,7 +19,7 @@ def speak(text: str):
 
             # Play it correctly using ALSA (let aplay auto-detect WAV format)
             subprocess.run(
-                ["aplay", "-D", "plug:hw:2,0"],
+                ["aplay", "-D", "plughw:2,0"],
                 stdin=espeak.stdout,
                 check=False
             )
@@ -40,7 +40,7 @@ class EmergencyAudio:
                 print(f"🔊 Playing emergency audio: {self.wav_path}")
 
                 subprocess.run(
-                    ["aplay", "-D", "plug:hw:2,0", self.wav_path],
+                    ["aplay", "-D", "plughw:2,0", self.wav_path],
                     check=False
                 )
 
