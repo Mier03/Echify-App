@@ -284,7 +284,7 @@ class SentenceBuilder:
         if chunk == ["NO"]:
             return "No."
         if chunk == ["OKAY"]:
-            return "Okay?" if is_last else "Okay."
+            return "Okay." if is_last else "Okay."
         if chunk == ["GOOD"]:
             return "Good."
 
