@@ -32,10 +32,10 @@ SEQUENCE_LENGTH = 30
 
 
 # --- Gesture segmentation thresholds ---
-START_HAND_FRAMES = 4       # need this many consecutive frames with hands to "start" gesture
-END_NOHAND_FRAMES = 8       # need this many consecutive frames without hands to "end" gesture
-MIN_GESTURE_FRAMES = 12     # ignore gestures shorter than this
-COOLDOWN_SECONDS = 0.6       # after a prediction, ignore triggers briefly
+START_HAND_FRAMES = 2      # need this many consecutive frames with hands to "start" gesture
+END_NOHAND_FRAMES = 3       # need this many consecutive frames without hands to "end" gesture
+MIN_GESTURE_FRAMES = 3     # ignore gestures shorter than this
+COOLDOWN_SECONDS = 0.3      # after a prediction, ignore triggers briefly
 
 
 # --- Raspberry Pi performance tuning ---
