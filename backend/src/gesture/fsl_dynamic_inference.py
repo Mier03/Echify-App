@@ -27,10 +27,10 @@ INPUT_SIZE = 252
 SEQUENCE_LENGTH = 30
 
 # Gesture segmentation thresholds
-START_HAND_FRAMES = 4
-END_NOHAND_FRAMES = 6
-MIN_GESTURE_FRAMES = 12
-COOLDOWN_SECONDS = 0.6
+START_HAND_FRAMES = 2
+END_NOHAND_FRAMES = 3
+MIN_GESTURE_FRAMES = 3
+COOLDOWN_SECONDS = 0.3
 
 
 class ImprovedLSTMModel(nn.Module):
@@ -302,7 +302,7 @@ def update_and_maybe_predict(frame: np.ndarray) -> dict:
                 "top1_conf": 0.0,
                 "top3_labels": [],
                 "top3_confs": [],
-                "is_ready": False,
+                "is_ready": False,      
                 "debug": {
                     "hands_detected": hands_detected,
                     "collecting": collecting,
