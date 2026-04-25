@@ -2,12 +2,10 @@
 fsl_dynamic_inference.py
 Inference module for FSL dynamic sign language recognition.
 
-Raspberry Pi version using laptop branch model architecture:
-- Correct trained model architecture
+UPDATED:
 - Segment-based inference
-- Resample collected frames to SEQUENCE_LENGTH
-- Adds velocity features before inference
-- Raspberry Pi optimization: frame skipping for MediaPipe
+- Removed PLEASE -> ME preview override
+- Uses END_NOHAND_FRAMES correctly
 """
 
 import json
@@ -19,38 +17,23 @@ import torch.nn as nn
 from pathlib import Path
 import time
 
-
 # --- Configuration ---
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 MODEL_PATH = PROJECT_ROOT / 'models' / 'lstm_dynamic_final' / 'final_model_complete.pth'
 LABEL_MAP_PATH = PROJECT_ROOT / 'models' / 'lstm_dynamic_final' / 'label_mapping.json'
-
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 INPUT_SIZE = 252
 SEQUENCE_LENGTH = 30
 
-
-# --- Gesture segmentation thresholds ---
-START_HAND_FRAMES = 2      # need this many consecutive frames with hands to "start" gesture
-END_NOHAND_FRAMES = 3       # need this many consecutive frames without hands to "end" gesture
-MIN_GESTURE_FRAMES = 3     # ignore gestures shorter than this
-COOLDOWN_SECONDS = 0.3      # after a prediction, ignore triggers briefly
-
-
-# --- Raspberry Pi performance tuning ---
-_FRAME_SKIP = 2
-_frame_counter = 0
-_last_frame_feats = None
-_last_hands_detected = False
+# Gesture segmentation thresholds
+START_HAND_FRAMES = 4
+END_NOHAND_FRAMES = 6
+MIN_GESTURE_FRAMES = 12
+COOLDOWN_SECONDS = 0.6
 
 
-# --- Model Architecture ---
 class ImprovedLSTMModel(nn.Module):
-    """
-    Laptop branch model architecture.
-    Must match the trained checkpoint.
-    """
     def __init__(
         self,
         input_size=INPUT_SIZE,
@@ -110,12 +93,11 @@ last_prediction_time = 0.0
 
 
 def normalize_landmarks(landmarks_array: np.ndarray) -> np.ndarray:
-    """Normalize landmarks relative to wrist landmark."""
     coords = landmarks_array.reshape(21, 3)
     wrist = coords[0]
     centered = coords - wrist
-
     max_val = np.max(np.abs(centered))
+
     if max_val > 0:
         centered = centered / max_val
 
@@ -123,11 +105,10 @@ def normalize_landmarks(landmarks_array: np.ndarray) -> np.ndarray:
 
 
 def load_label_mapping():
-    """Load label mapping from JSON file."""
     global label_mapping
 
     if LABEL_MAP_PATH.exists():
-        with open(LABEL_MAP_PATH, 'r', encoding='utf-8') as f:
+        with open(LABEL_MAP_PATH, "r", encoding="utf-8") as f:
             label_mapping = json.load(f)
         print(f"✅ Loaded label mapping: {len(label_mapping)} labels")
     else:
@@ -136,7 +117,6 @@ def load_label_mapping():
 
 
 def get_label(folder_name: str) -> str:
-    """Convert folder/class id to readable label."""
     global label_mapping
 
     if label_mapping and folder_name in label_mapping:
@@ -146,13 +126,8 @@ def get_label(folder_name: str) -> str:
 
 
 def initialize_dynamic_model():
-    """Load trained model and initialize MediaPipe."""
     global model, classes, mp_hands, hands
     global collecting, gesture_frames, consec_hand, consec_nohand, last_prediction_time
-    global _frame_counter, _last_frame_feats, _last_hands_detected
-
-    if model is not None and hands is not None:
-        return
 
     print("=" * 60)
     print("🚀 Initializing FSL Dynamic Recognition System")
@@ -166,19 +141,17 @@ def initialize_dynamic_model():
     print(f"📂 Loading model from: {MODEL_PATH}")
     checkpoint = torch.load(MODEL_PATH, map_location=DEVICE)
 
-    classes = checkpoint['classes']
-    num_classes = checkpoint['num_classes']
-    input_size = checkpoint.get('input_size', INPUT_SIZE)
-
-    best_config = checkpoint.get('best_config', {})
-    dropout = best_config.get('Dropout', 0.5)
+    classes = checkpoint["classes"]
+    num_classes = checkpoint["num_classes"]
+    input_size = checkpoint.get("input_size", INPUT_SIZE)
 
     print("📊 Model Info:")
     print(f"   - Classes: {num_classes}")
-    print(f"   - Device: {DEVICE}")
-    if 'test_metrics' in checkpoint and 'f1' in checkpoint['test_metrics']:
-        print(f"   - Test F1: {checkpoint['test_metrics']['f1']:.4f}")
-    print(f"   - Architecture: hidden=128, layers=2, dropout={dropout}")
+    print(f"   - Device:  {DEVICE}")
+    print(f"   - Test F1: {checkpoint['test_metrics']['f1']:.4f}")
+
+    best_config = checkpoint.get("best_config", {})
+    dropout = best_config.get("Dropout", 0.5)
 
     model = ImprovedLSTMModel(
         input_size=input_size,
@@ -186,9 +159,11 @@ def initialize_dynamic_model():
         dropout=dropout,
     )
 
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(checkpoint["model_state_dict"])
     model.to(DEVICE)
     model.eval()
+
+    print(f"   - Architecture: hidden=128, layers=2, dropout={dropout}, no attention")
 
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
@@ -204,26 +179,12 @@ def initialize_dynamic_model():
     consec_nohand = 0
     last_prediction_time = 0.0
 
-    _frame_counter = 0
-    _last_frame_feats = None
-    _last_hands_detected = False
-
     print("✅ Initialization complete!")
     print("=" * 60 + "\n")
 
 
-def extract_frame_features(frame: np.ndarray) -> tuple[np.ndarray, bool]:
-    """
-    Extract 126-dim hand landmark features.
-    Raspberry Pi optimization: runs MediaPipe every _FRAME_SKIP frames.
-    """
+def extract_frame_features(frame: np.ndarray) -> tuple:
     global hands
-    global _frame_counter, _last_frame_feats, _last_hands_detected
-
-    _frame_counter += 1
-
-    if (_frame_counter % _FRAME_SKIP) != 0 and _last_frame_feats is not None:
-        return _last_frame_feats.copy(), _last_hands_detected
 
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(img_rgb)
@@ -244,7 +205,7 @@ def extract_frame_features(frame: np.ndarray) -> tuple[np.ndarray, bool]:
 
             norm_lms = normalize_landmarks(raw_lms)
 
-            if label == 'Left':
+            if label == "Left":
                 frame_feats[0:63] = norm_lms
             else:
                 frame_feats[63:126] = norm_lms
@@ -256,14 +217,10 @@ def extract_frame_features(frame: np.ndarray) -> tuple[np.ndarray, bool]:
                 mp.solutions.hands.HAND_CONNECTIONS,
             )
 
-    _last_frame_feats = frame_feats.copy()
-    _last_hands_detected = hands_detected
-
     return frame_feats, hands_detected
 
 
 def resample_sequence(seq: np.ndarray, target_len: int) -> np.ndarray:
-    """Resample variable-length sequence to fixed target length."""
     T = seq.shape[0]
 
     if T == 0:
@@ -277,11 +234,6 @@ def resample_sequence(seq: np.ndarray, target_len: int) -> np.ndarray:
 
 
 def predict_from_sequence(sequence_30: np.ndarray) -> dict:
-    """
-    Run inference on a sequence.
-    Input: (30, 126)
-    Adds velocity to become (30, 252).
-    """
     global model, classes
 
     if sequence_30.shape[1] == 126:
@@ -294,30 +246,21 @@ def predict_from_sequence(sequence_30: np.ndarray) -> dict:
     with torch.no_grad():
         output = model(sequence_tensor)
         probs = torch.softmax(output, dim=1)
-
-        top3_probs, top3_idx = torch.topk(
-            probs,
-            k=min(3, len(classes)),
-            dim=1,
-        )
+        top3_probs, top3_idx = torch.topk(probs, k=min(3, len(classes)), dim=1)
 
         top3_probs = top3_probs.cpu().numpy()[0]
         top3_idx = top3_idx.cpu().numpy()[0]
 
     return {
-        'top1_label': get_label(classes[top3_idx[0]]),
-        'top1_conf': float(top3_probs[0]),
-        'top3_labels': [get_label(classes[i]) for i in top3_idx],
-        'top3_confs': [float(p) for p in top3_probs],
-        'is_ready': True,
+        "top1_label": get_label(classes[top3_idx[0]]),
+        "top1_conf": float(top3_probs[0]),
+        "top3_labels": [get_label(classes[i]) for i in top3_idx],
+        "top3_confs": [float(p) for p in top3_probs],
+        "is_ready": True,
     }
 
 
 def update_and_maybe_predict(frame: np.ndarray) -> dict:
-    """
-    Call this every camera frame.
-    Collects gesture frames and predicts when gesture ends.
-    """
     global collecting, gesture_frames, consec_hand, consec_nohand, last_prediction_time
 
     feats, hands_detected = extract_frame_features(frame)
@@ -332,7 +275,7 @@ def update_and_maybe_predict(frame: np.ndarray) -> dict:
         consec_nohand += 1
         consec_hand = 0
 
-    if not collecting and not in_cooldown and consec_hand >= START_HAND_FRAMES:
+    if (not collecting) and (not in_cooldown) and (consec_hand >= START_HAND_FRAMES):
         collecting = True
         gesture_frames = [feats]
 
@@ -355,63 +298,62 @@ def update_and_maybe_predict(frame: np.ndarray) -> dict:
 
             gesture_frames = []
             return {
-                'top1_label': 'Too short / ignored',
-                'top1_conf': 0.0,
-                'top3_labels': [],
-                'top3_confs': [],
-                'is_ready': False,
+                "top1_label": "Too short / ignored",
+                "top1_conf": 0.0,
+                "top3_labels": [],
+                "top3_confs": [],
+                "is_ready": False,
+                "debug": {
+                    "hands_detected": hands_detected,
+                    "collecting": collecting,
+                    "frames_collected": 0,
+                    "consec_hand": int(consec_hand),
+                    "consec_nohand": int(consec_nohand),
+                },
             }
 
     return {
-        'top1_label': "Collecting..." if collecting else "Waiting...",
-        'top1_conf': 0.0,
-        'top3_labels': [],
-        'top3_confs': [],
-        'is_ready': False,
-        'debug': {
-            'collecting': collecting,
-            'frames_collected': int(len(gesture_frames)),
-            'consec_hand': int(consec_hand),
-            'consec_nohand': int(consec_nohand),
-            'hands_detected': bool(hands_detected),
+        "top1_label": "Collecting..." if collecting else "Waiting...",
+        "top1_conf": 0.0,
+        "top3_labels": [],
+        "top3_confs": [],
+        "is_ready": False,
+        "debug": {
+            "collecting": collecting,
+            "frames_collected": int(len(gesture_frames)),
+            "consec_hand": int(consec_hand),
+            "consec_nohand": int(consec_nohand),
+            "hands_detected": bool(hands_detected),
         },
     }
 
 
 def reset_buffer():
-    """Manual reset of gesture collection state."""
     global collecting, gesture_frames, consec_hand, consec_nohand
-    global _frame_counter, _last_frame_feats, _last_hands_detected
 
     collecting = False
     gesture_frames = []
     consec_hand = 0
     consec_nohand = 0
 
-    _frame_counter = 0
-    _last_frame_feats = None
-    _last_hands_detected = False
-
     print("🔄 Gesture state reset")
 
 
-def get_model_info():
-    """Return model status and config."""
+def get_model_info() -> dict:
     global classes
 
     if model is None:
-        return {'status': 'not_initialized'}
+        return {"status": "not_initialized"}
 
     return {
-        'status': 'ready',
-        'num_classes': len(classes),
-        'device': str(DEVICE),
-        'sequence_length': SEQUENCE_LENGTH,
-        'frame_skip': _FRAME_SKIP,
-        'segmentation': {
-            'START_HAND_FRAMES': START_HAND_FRAMES,
-            'END_NOHAND_FRAMES': END_NOHAND_FRAMES,
-            'MIN_GESTURE_FRAMES': MIN_GESTURE_FRAMES,
-            'COOLDOWN_SECONDS': COOLDOWN_SECONDS,
+        "status": "ready",
+        "num_classes": len(classes),
+        "device": str(DEVICE),
+        "sequence_length": SEQUENCE_LENGTH,
+        "segmentation": {
+            "START_HAND_FRAMES": START_HAND_FRAMES,
+            "END_NOHAND_FRAMES": END_NOHAND_FRAMES,
+            "MIN_GESTURE_FRAMES": MIN_GESTURE_FRAMES,
+            "COOLDOWN_SECONDS": COOLDOWN_SECONDS,
         },
     }
