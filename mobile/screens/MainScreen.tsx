@@ -339,7 +339,7 @@ export default function MainScreen() {
             <View style={styles.speechLayout}>
               {sosTriggered && (
                 <View style={styles.sosBanner}>
-                  <Text style={styles.sosBannerText}>🚨 SOS TRIGGERED!</Text>
+                  <Text style={styles.sosBannerText}>SOS TRIGGERED!</Text>
                 </View>
               )}
 
@@ -601,22 +601,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-sosBanner: {
-  alignSelf: "center",        // centers it instead of full width
-  backgroundColor: THEME.danger,
-  borderRadius: 10,
-  paddingVertical: 6,         // smaller height
-  paddingHorizontal: 16,      // tighter width
-  marginBottom: 6,            // spacing below
-  minWidth: 200,              // optional: keeps it readable
-},
+  sosBanner: {
+    alignSelf: "center", // centers it instead of full width
+    backgroundColor: THEME.danger,
+    borderRadius: 10,
+    paddingVertical: 6, // smaller height
+    paddingHorizontal: 16, // tighter width
+    marginBottom: 6, // spacing below
+    minWidth: 200, // optional: keeps it readable
+  },
 
-sosBannerText: {
-  color: "#FFFFFF",
-  fontSize: 12,               // smaller text
-  fontWeight: "700",
-  textAlign: "center",
-},
+  sosBannerText: {
+    color: "#FFFFFF",
+    fontSize: 12, // smaller text
+    fontWeight: "700",
+    textAlign: "center",
+  },
 
   speechTopPanel: {
     height: 60,
