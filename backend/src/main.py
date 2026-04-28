@@ -31,7 +31,7 @@ from src.stt.ws_stt_live import get_model
 
 from session_logger import global_logger
 
-
+latest_sos = {"triggered": False}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     startup_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -132,7 +132,21 @@ async def sos_trigger(request: Request):
         "success":           success,
     })
 
+@app.post("/sos-triggered")
+async def sos_triggered():
+    global latest_sos
+    latest_sos["triggered"] = True
+    return {"ok": True}
 
+@app.get("/sos-status")
+async def sos_status():
+    return latest_sos
+
+@app.post("/sos-clear")
+async def sos_clear():
+    global latest_sos
+    latest_sos["triggered"] = False
+    return {"ok": True}
 # ── Live summary endpoint ─────────────────────────────────────────────────────
 
 @app.get("/session/summary")

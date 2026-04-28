@@ -23,7 +23,7 @@ const SENTENCE_DISPLAY_MS = 4000;
 
 export default function MainScreen() {
   const [activeTab, setActiveTab] = useState<"sign" | "speech">("sign");
-
+  const [sosTriggered, setSosTriggered] = useState(false);
   // ── Sign tab state (dynamic) ──────────────────────────────────────────────
   const [signedWords, setSignedWords] = useState<string[]>([]);
   const [finalSentence, setFinalSentence] = useState("");
@@ -91,6 +91,33 @@ export default function MainScreen() {
       });
     }, SENTENCE_DISPLAY_MS);
   };
+
+  useEffect(() => {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch("http://localhost:8000/sos-status");
+      const data = await res.json();
+
+      if (data.triggered) {
+        setSosTriggered(true);
+        setSignStatus("🚨 SOS TRIGGERED!");
+
+        await fetch("http://localhost:8000/sos-clear", {
+          method: "POST",
+        });
+
+        setTimeout(() => {
+          setSosTriggered(false);
+          setSignStatus("Waiting for sign...");
+        }, 4000);
+      }
+    } catch (error) {
+      console.log("SOS check failed:", error);
+    }
+  }, 1000);
+
+  return () => clearInterval(interval);
+}, []);
 
   // ── Sign websocket effect (dynamic sign flow) ────────────────────────────
   useEffect(() => {
@@ -251,17 +278,19 @@ export default function MainScreen() {
                 <View style={styles.statusBar}>
                   <View
                     style={[
-                      styles.statusDot,
-                      signStatus.startsWith("✅")
-                        ? styles.dotGreen
-                        : signStatus.startsWith("✋")
-                          ? styles.dotYellow
-                          : signStatus.startsWith("💬")
-                            ? styles.dotBlue
-                            : signStatus.startsWith("👋")
+                        styles.statusDot,
+                        sosTriggered
+                          ? styles.dotRed
+                          : signStatus.startsWith("✅")
+                            ? styles.dotGreen
+                            : signStatus.startsWith("✋")
                               ? styles.dotYellow
-                              : styles.dotGray,
-                    ]}
+                              : signStatus.startsWith("💬")
+                                ? styles.dotBlue
+                                : signStatus.startsWith("👋")
+                                  ? styles.dotYellow
+                                  : styles.dotGray,
+                      ]}
                   />
                   <Text style={styles.statusText} numberOfLines={1}>
                     {signStatus}
@@ -613,6 +642,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
+  
+  dotRed: {
+  backgroundColor: THEME.danger,
+},
 
   speechBottomPanel: {
     flex: 1,
