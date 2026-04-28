@@ -20,6 +20,7 @@ import CameraComponent from "../components/CameraView";
 
 // TTS plays through Pi's MAX 98375A speaker via backend speak()
 const SENTENCE_DISPLAY_MS = 4000;
+const SOS_DISPLAY_MS = 4000; // match your help_me.mp3 duration
 
 export default function MainScreen() {
   const [activeTab, setActiveTab] = useState<"sign" | "speech">("sign");
@@ -92,31 +93,43 @@ export default function MainScreen() {
     }, SENTENCE_DISPLAY_MS);
   };
 
-  useEffect(() => {
+useEffect(() => {
+  let sosTimeout: ReturnType<typeof setTimeout> | null = null;
+  let isShowingSos = false;
+
   const interval = setInterval(async () => {
     try {
+      if (isShowingSos) return;
+
       const res = await fetch("http://localhost:8000/sos-status");
       const data = await res.json();
 
       if (data.triggered) {
+        isShowingSos = true;
+
         setSosTriggered(true);
         setSignStatus("🚨 SOS TRIGGERED!");
 
-        await fetch("http://localhost:8000/sos-clear", {
-          method: "POST",
-        });
-
-        setTimeout(() => {
+        sosTimeout = setTimeout(async () => {
           setSosTriggered(false);
           setSignStatus("Waiting for sign...");
-        }, 4000);
+
+          await fetch("http://localhost:8000/sos-clear", {
+            method: "POST",
+          });
+
+          isShowingSos = false;
+        }, SOS_DISPLAY_MS);
       }
     } catch (error) {
       console.log("SOS check failed:", error);
     }
   }, 1000);
 
-  return () => clearInterval(interval);
+  return () => {
+    clearInterval(interval);
+    if (sosTimeout) clearTimeout(sosTimeout);
+  };
 }, []);
 
   // ── Sign websocket effect (dynamic sign flow) ────────────────────────────
@@ -642,7 +655,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
-  
+
   dotRed: {
   backgroundColor: THEME.danger,
 },
