@@ -6,7 +6,7 @@ from signal import pause
 audio = EmergencyAudio("help_me.mp3")
 
 # Add debounce to prevent false/multiple triggers
-button = Button(26, pull_up=True, bounce_time=0.1)
+button = Button(26, pull_up=True, bounce_time=0.03)
 
 press_count = 0
 last_press_time = 0
