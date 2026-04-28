@@ -98,7 +98,7 @@ export default function MainScreen() {
 
         if (data.triggered && !sosTriggered) {
           setSosTriggered(true);
-          setSignStatus("🚨 SOS TRIGGERED!");
+          setSignStatus("SOS TRIGGERED!");
 
           setTimeout(async () => {
             setSosTriggered(false);
@@ -601,19 +601,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  sosBanner: {
-    backgroundColor: THEME.danger,
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
+sosBanner: {
+  alignSelf: "center",        // centers it instead of full width
+  backgroundColor: THEME.danger,
+  borderRadius: 10,
+  paddingVertical: 6,         // smaller height
+  paddingHorizontal: 16,      // tighter width
+  marginBottom: 6,            // spacing below
+  minWidth: 200,              // optional: keeps it readable
+},
 
-  sosBannerText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
-  },
+sosBannerText: {
+  color: "#FFFFFF",
+  fontSize: 12,               // smaller text
+  fontWeight: "700",
+  textAlign: "center",
+},
 
   speechTopPanel: {
     height: 60,
