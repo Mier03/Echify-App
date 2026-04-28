@@ -2,8 +2,12 @@ from gpiozero import Button
 from tts.tts_engine import EmergencyAudio
 import time
 from signal import pause
+# Importing a hypothetical display library
+from hardware.display import Display
 
 audio = EmergencyAudio("help_me.mp3")
+# Initialize the display
+display = Display()
 
 button = Button(26, pull_up=True)
 
@@ -27,6 +31,8 @@ def handle_press():
     if press_count == 3:
         print("🚨 Triple Press Detected! Playing 'Help me!'...")
         audio.play_help_instant()
+        # Notify the display
+        display.show_message("SOS Triggered! Help is on the way!")
         press_count = 0  # Reset for next time
 
 # Function to the button press event
@@ -37,4 +43,9 @@ print("Pi 5 Emergency System Active")
 print("Press button 3x quickly to speak.")
 print("="*40)
 
-pause()
+# Replace pause() with a loop to keep the script running
+try:
+    while True:
+        time.sleep(1)  # Keep the script alive
+except KeyboardInterrupt:
+    print("\nExiting... Goodbye!")
