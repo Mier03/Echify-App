@@ -18,26 +18,23 @@ import {
 import AudioWave from "../components/AudioWave";
 import CameraComponent from "../components/CameraView";
 
-// TTS plays through Pi's MAX 98375A speaker via backend speak()
 const SENTENCE_DISPLAY_MS = 4000;
-const SOS_DISPLAY_MS = 4000; // match your help_me.mp3 duration
+const SOS_DISPLAY_MS = 4000;
 
 export default function MainScreen() {
   const [activeTab, setActiveTab] = useState<"sign" | "speech">("sign");
   const [sosTriggered, setSosTriggered] = useState(false);
-  // ── Sign tab state (dynamic) ──────────────────────────────────────────────
+
   const [signedWords, setSignedWords] = useState<string[]>([]);
   const [finalSentence, setFinalSentence] = useState("");
   const [signStatus, setSignStatus] = useState("Waiting for sign...");
 
-  // ── Speech tab state (KEEP PI HARDWARE FLOW) ─────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
   const [sttText, setSttText] = useState("Say something...");
   const [isSpeechListening, setIsSpeechListening] = useState(false);
 
   const autoClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Animations ────────────────────────────────────────────────────────────
   const sentenceFade = useRef(new Animated.Value(0)).current;
   const sentenceSlide = useRef(new Animated.Value(16)).current;
   const chipsFade = useRef(new Animated.Value(0)).current;
@@ -93,46 +90,33 @@ export default function MainScreen() {
     }, SENTENCE_DISPLAY_MS);
   };
 
-useEffect(() => {
-  let sosTimeout: ReturnType<typeof setTimeout> | null = null;
-  let isShowingSos = false;
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("http://localhost:8000/sos-status");
+        const data = await res.json();
 
-  const interval = setInterval(async () => {
-    try {
-      if (isShowingSos) return;
+        if (data.triggered && !sosTriggered) {
+          setSosTriggered(true);
+          setSignStatus("🚨 SOS TRIGGERED!");
 
-      const res = await fetch("http://localhost:8000/sos-status");
-      const data = await res.json();
+          setTimeout(async () => {
+            setSosTriggered(false);
+            setSignStatus("Waiting for sign...");
 
-      if (data.triggered) {
-        isShowingSos = true;
-
-        setSosTriggered(true);
-        setSignStatus("🚨 SOS TRIGGERED!");
-
-        sosTimeout = setTimeout(async () => {
-          setSosTriggered(false);
-          setSignStatus("Waiting for sign...");
-
-          await fetch("http://localhost:8000/sos-clear", {
-            method: "POST",
-          });
-
-          isShowingSos = false;
-        }, SOS_DISPLAY_MS);
+            await fetch("http://localhost:8000/sos-clear", {
+              method: "POST",
+            });
+          }, SOS_DISPLAY_MS);
+        }
+      } catch (error) {
+        console.log("SOS check failed:", error);
       }
-    } catch (error) {
-      console.log("SOS check failed:", error);
-    }
-  }, 1000);
+    }, 1000);
 
-  return () => {
-    clearInterval(interval);
-    if (sosTimeout) clearTimeout(sosTimeout);
-  };
-}, []);
+    return () => clearInterval(interval);
+  }, [sosTriggered]);
 
-  // ── Sign websocket effect (dynamic sign flow) ────────────────────────────
   useEffect(() => {
     if (activeTab === "sign") {
       connectSocket((data) => {
@@ -143,13 +127,16 @@ useEffect(() => {
         const conf = data?.top1_conf ?? 0;
         const dbg = data?.debug ?? {};
 
-        // Sentence can arrive on any frame
         const sentence = data?.sentence_english;
         if (typeof sentence === "string" && sentence.trim().length > 0) {
           setFinalSentence(sentence);
           setSignedWords([]);
           animateSentenceIn();
-          setSignStatus("💬 Speaking on Pi speaker...");
+
+          if (!sosTriggered) {
+            setSignStatus("💬 Speaking on Pi speaker...");
+          }
+
           scheduleAutoClear();
           return;
         }
@@ -157,6 +144,8 @@ useEffect(() => {
         const isCollecting = label === "Collecting...";
         const isWaiting = label === "Waiting...";
         const isTooShort = label === "Too short / ignored";
+
+        if (sosTriggered) return;
 
         if (isCollecting || dbg.collecting) {
           setSignStatus(`✋ Signing... (${dbg.frames_collected ?? 0} frames)`);
@@ -169,13 +158,10 @@ useEffect(() => {
         }
 
         if (!isReady || isWaiting || isTooShort) {
-          setSignStatus((prev) =>
-            prev.startsWith("💬") ? prev : "Waiting for sign...",
-          );
+          setSignStatus("Waiting for sign...");
           return;
         }
 
-        // Single sign recognized → add chip
         if (typeof label === "string" && label.length > 0 && conf >= 0.4) {
           setSignedWords((prev) => [...prev, label]);
           animateChipIn();
@@ -190,9 +176,8 @@ useEffect(() => {
       closeSocket();
       if (autoClearTimerRef.current) clearTimeout(autoClearTimerRef.current);
     };
-  }, [activeTab]);
+  }, [activeTab, sosTriggered]);
 
-  // ── STT websocket effect (KEEP EXACT PI HARDWARE FLOW) ───────────────────
   useEffect(() => {
     if (activeTab !== "speech") {
       closeSttSocket();
@@ -229,12 +214,10 @@ useEffect(() => {
     };
   }, [activeTab]);
 
-  // ── KEEP EXACT PI SPEECH TOGGLE FLOW ──────────────────────────────────────
   const handleSpeechToggle = () => {
     if (isSpeechListening) {
       stopSttListening();
       setIsRecording(false);
-      // wait for transcript/error before setting isSpeechListening false
     } else {
       setSttText("Listening...");
       setIsSpeechListening(true);
@@ -242,7 +225,6 @@ useEffect(() => {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <View style={styles.mainWrapper}>
@@ -291,20 +273,21 @@ useEffect(() => {
                 <View style={styles.statusBar}>
                   <View
                     style={[
-                        styles.statusDot,
-                        sosTriggered
-                          ? styles.dotRed
-                          : signStatus.startsWith("✅")
-                            ? styles.dotGreen
-                            : signStatus.startsWith("✋")
-                              ? styles.dotYellow
-                              : signStatus.startsWith("💬")
-                                ? styles.dotBlue
-                                : signStatus.startsWith("👋")
-                                  ? styles.dotYellow
-                                  : styles.dotGray,
-                      ]}
+                      styles.statusDot,
+                      sosTriggered
+                        ? styles.dotRed
+                        : signStatus.startsWith("✅")
+                          ? styles.dotGreen
+                          : signStatus.startsWith("✋")
+                            ? styles.dotYellow
+                            : signStatus.startsWith("💬")
+                              ? styles.dotBlue
+                              : signStatus.startsWith("👋")
+                                ? styles.dotYellow
+                                : styles.dotGray,
+                    ]}
                   />
+
                   <Text style={styles.statusText} numberOfLines={1}>
                     {signStatus}
                   </Text>
@@ -354,6 +337,12 @@ useEffect(() => {
             </View>
           ) : (
             <View style={styles.speechLayout}>
+              {sosTriggered && (
+                <View style={styles.sosBanner}>
+                  <Text style={styles.sosBannerText}>🚨 SOS TRIGGERED!</Text>
+                </View>
+              )}
+
               <View style={styles.speechTopPanel}>
                 <View style={styles.waveRow}>
                   <View style={styles.waveWrapper}>
@@ -528,6 +517,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#ccc",
   },
 
+  dotRed: {
+    backgroundColor: THEME.danger,
+  },
+
   statusText: {
     fontSize: 10,
     fontWeight: "600",
@@ -569,12 +562,6 @@ const styles = StyleSheet.create({
     color: THEME.primary,
   },
 
-  pauseHint: {
-    fontSize: 9,
-    color: "#bbb",
-    fontStyle: "italic",
-  },
-
   divider: {
     height: 1,
     backgroundColor: THEME.border,
@@ -612,6 +599,20 @@ const styles = StyleSheet.create({
   speechLayout: {
     flex: 1,
     gap: 12,
+  },
+
+  sosBanner: {
+    backgroundColor: THEME.danger,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+
+  sosBannerText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   speechTopPanel: {
@@ -655,10 +656,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
-
-  dotRed: {
-  backgroundColor: THEME.danger,
-},
 
   speechBottomPanel: {
     flex: 1,
