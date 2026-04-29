@@ -270,6 +270,11 @@ export default function MainScreen() {
               </View>
 
               <View style={styles.translationPanel}>
+                {sosTriggered && (
+                  <View style={styles.sosBanner}>
+                    <Text style={styles.sosBannerText}>SOS TRIGGERED!</Text>
+                  </View>
+                )}
                 <View style={styles.statusBar}>
                   <View
                     style={[
