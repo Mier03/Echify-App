@@ -72,6 +72,46 @@ class SentenceBuilder:
             "GOOD AFTERNOON": "good afternoon",
         }
 
+        # ----------------------------------------------------------
+        # Load CSV phrases into a lookup dict: frozenset -> output
+        # CSV is loaded alongside this file (same directory).
+        # Falls back gracefully if the file is missing.
+        # ----------------------------------------------------------
+        self.csv_phrases: dict = {}
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "phrases.csv")
+        self._load_csv_phrases(csv_path)
+
+    # ------------------------------------------------------------
+    # CSV loader
+    # ------------------------------------------------------------
+    def _load_csv_phrases(self, csv_path: str) -> None:
+        """Read phrases.csv and store each row as frozenset(tokens) -> output string.
+        Lines starting with '#' are treated as comments and skipped.
+        Expected columns: category, token_set, output
+        token_set uses '|' as delimiter (e.g. "I|WANT|EAT").
+        """
+        if not os.path.exists(csv_path):
+            return
+ 
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                # Skip blank lines or comment lines
+                if not row or row[0].strip().startswith("#"):
+                    continue
+                if len(row) < 3:
+                    continue
+ 
+                category, token_str, output = row[0].strip(), row[1].strip(), row[2].strip()
+ 
+                # Strip surrounding quotes from token_str if present
+                token_str = token_str.strip('"').strip("'")
+                output = output.strip('"').strip("'")
+ 
+                tokens = frozenset(t.strip() for t in token_str.split("|") if t.strip())
+                if tokens and output:
+                    self.csv_phrases[tokens] = output
+
     # ------------------------------------------------------------
     # Token collection
     # ------------------------------------------------------------
@@ -284,6 +324,14 @@ class SentenceBuilder:
     def _render_exact(self, chunk: List[str], is_last: bool = False) -> Optional[str]:
         token_set = set(chunk)
 
+        # -------------------------------------------------------
+        # Check CSV phrases FIRST before hardcoded rules.
+        # New phrases loaded from phrases.csv are matched here.
+        # -------------------------------------------------------
+        frozen = frozenset(chunk)
+        if frozen in self.csv_phrases:
+            return self.csv_phrases[frozen]
+
         # Repeated standalone words
         if all(tok == "HELLO" for tok in chunk):
             return " ".join(["Hello!"] * len(chunk))
@@ -414,6 +462,18 @@ class SentenceBuilder:
     def _render_fuzzy(self, chunk: List[str]) -> Optional[str]:
         token_set = set(chunk)
 
+        # -------------------------------------------------------
+        # Check CSV phrases with fuzzy scoring BEFORE hardcoded
+        # candidates. New CSV entries participate in fuzzy match.
+        # -------------------------------------------------------
+        best_csv_output = None
+        best_csv_score = 0.0
+        for frozen_set, output in self.csv_phrases.items():
+            score = self._grammar_similarity_score(token_set, set(frozen_set), output)
+            if score > best_csv_score:
+                best_csv_score = score
+                best_csv_output = output
+
         candidates = [
             ({"WHAT", "YOU", "NAME"}, "What is your name?"),
             ({"WHAT", "NAME"}, "What is your name?"),
@@ -459,6 +519,9 @@ class SentenceBuilder:
                 best_score = score
                 best_output = output
 
+        # Return whichever scored higher: CSV or hardcoded
+        if best_csv_score >= 0.72 and best_csv_score >= best_score:
+            return best_csv_output
         return best_output if best_score >= 0.72 else None
 
     def _grammar_similarity_score(self, chunk_set: Set[str], expected_set: Set[str], output: str) -> float:
