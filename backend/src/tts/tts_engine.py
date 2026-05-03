@@ -7,15 +7,17 @@ from pydub import AudioSegment
 
 # Load Coqui once
 tts = TTS(
-    model_name="tts_models/en/ljspeech/tacotron2-DDC",
-    progress_bar=False
+    model_name="tts_models/en/ljspeech/speedy-speech",
+    progress_bar=False,
+    gpu=False
 )
+
 
 OUTPUT_PATH = Path("/tmp/coqui_output.wav")
 SLOW_OUTPUT_PATH = Path("/tmp/coqui_output_slow.wav")
 
 # 1.0 = normal, lower = slower
-SPEECH_SPEED = 0.85
+SPEECH_SPEED = 1.0
 
 
 def slow_down_wav(input_path, output_path, speed=0.85):
