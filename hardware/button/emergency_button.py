@@ -4,8 +4,9 @@ import time
 from signal import pause
 import requests
 import sys
-sys.path.insert(0, "/home/sms/Echify-App/backend") 
-from session_logger import global_logger       
+
+sys.path.insert(0, "/home/sms/Echify-App/backend")
+from session_logger import global_logger
 
 audio = EmergencyAudio("help_me.mp3")
 
@@ -17,17 +18,19 @@ RESET_TIMEOUT = 0.8
 
 BACKEND_URL = "http://localhost:8000/sos-triggered"
 
-def notify_app():
+
+def notify_app(response_ms: float):
     try:
         requests.post(BACKEND_URL, json={
-            "state": "triggered",
-            "response_time_ms": 0.0,
-            "success": True,
-            "client_id": "physical_button"
+            "state":            "triggered",
+            "response_time_ms": response_ms,
+            "success":          True,
+            "client_id":        "physical_button"
         }, timeout=1)
         print("✅ SOS notification sent to backend", flush=True)
     except Exception as e:
         print(f"⚠️ Failed to notify backend: {e}", flush=True)
+
 
 def handle_press():
     global press_count, last_press_time
@@ -46,13 +49,12 @@ def handle_press():
     if press_count >= 3:
         print("🚨 Triple Press Detected! Playing 'Help me!'...", flush=True)
 
-        t0 = time.monotonic()          # ← start timer
-        audio.play_help_instant()
-        response_ms = (time.monotonic() - t0) * 1000 
-        
-        notify_app()
+        t0 = time.monotonic()
+        audio.play_help_instant()          # starts daemon thread, returns instantly
+        response_ms = (time.monotonic() - t0) * 1000
 
-        # ← log to session logger
+        notify_app(response_ms)
+
         global_logger.log_sos(
             response_time_ms=response_ms,
             state="triggered",
@@ -60,8 +62,11 @@ def handle_press():
             notes="physical_button triple_press"
         )
 
+        print(f"✅ SOS logged | response={response_ms:.1f}ms", flush=True)
+
         press_count = 0
         last_press_time = 0
+
 
 button.when_pressed = handle_press
 
