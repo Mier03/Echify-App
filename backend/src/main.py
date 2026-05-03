@@ -133,10 +133,28 @@ async def sos_trigger(request: Request):
     })
 
 @app.post("/sos-triggered")
-async def sos_triggered():
+async def sos_triggered(request: Request):
     global latest_sos
     latest_sos["triggered"] = True
-    return {"ok": True}
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    state = body.get("state", "triggered")
+    response_time_ms = float(body.get("response_time_ms", 0.0))
+    success = bool(body.get("success", True))
+    client_id = body.get("client_id", "physical_button")
+
+    global_logger.log_sos(
+        response_time_ms=response_time_ms,
+        state=state,
+        success=success,
+        notes=f"client_id={client_id}"
+    )
+
+    return {"ok": True, "logged": True}
 
 @app.get("/sos-status")
 async def sos_status():

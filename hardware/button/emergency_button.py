@@ -6,8 +6,7 @@ from signal import pause
 import requests
 import sys
 
-sys.path.insert(0, "/home/sms/Echify-App/backend")
-from session_logger import global_logger
+
 
 audio = EmergencyAudio("help_me.mp3")
 
@@ -56,12 +55,6 @@ def handle_press():
 
         notify_app(response_ms)
 
-        global_logger.log_sos(
-            response_time_ms=response_ms,
-            state="triggered",
-            success=True,
-            notes="physical_button triple_press"
-        )
 
         print(f"✅ SOS logged | response={response_ms:.1f}ms", flush=True)
 
