@@ -6,7 +6,7 @@ from signal import pause
 import requests
 import sys
 
-sys.path.insert(0, "/home/sms/Echify-App/backend")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend")))
 from session_logger import global_logger
 
 audio = EmergencyAudio("help_me.mp3")
