@@ -1,3 +1,4 @@
+#emergency_button.py
 from gpiozero import Button
 from tts.tts_engine import EmergencyAudio
 import time
@@ -50,7 +51,7 @@ def handle_press():
         print("🚨 Triple Press Detected! Playing 'Help me!'...", flush=True)
 
         t0 = time.monotonic()
-        audio.play_help_instant()          # starts daemon thread, returns instantly
+        audio.play_help_instant()       
         response_ms = (time.monotonic() - t0) * 1000
 
         notify_app(response_ms)
@@ -69,8 +70,6 @@ def handle_press():
 
 
 button.when_pressed = handle_press
-
-global_logger.start()
 
 print("=" * 40, flush=True)
 print("Pi 5 Emergency System Active", flush=True)
