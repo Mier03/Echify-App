@@ -3,20 +3,16 @@ from tts.tts_engine import EmergencyAudio
 import time
 from signal import pause
 import requests
-import sys
 
-sys.path.insert(0, "/home/sms/Echify-App/backend")
-from session_logger import global_logger
 
 audio = EmergencyAudio("help_me.mp3")
-
 button = Button(26, pull_up=True, bounce_time=0.03)
 
 press_count = 0
 last_press_time = 0
 RESET_TIMEOUT = 0.8
 
-BACKEND_URL = "http://localhost:8000/sos-triggered"
+BACKEND_URL = "http://localhost:8000/sos/trigger"  # ← correct endpoint
 
 
 def notify_app(response_ms: float):
@@ -50,19 +46,12 @@ def handle_press():
         print("🚨 Triple Press Detected! Playing 'Help me!'...", flush=True)
 
         t0 = time.monotonic()
-        audio.play_help_instant()          # starts daemon thread, returns instantly
+        audio.play_help_instant()
         response_ms = (time.monotonic() - t0) * 1000
 
-        notify_app(response_ms)
+        notify_app(response_ms)  # → POST /sos/trigger → global_logger.log_sos() ✅
 
-        global_logger.log_sos(
-            response_time_ms=response_ms,
-            state="triggered",
-            success=True,
-            notes="physical_button triple_press"
-        )
-
-        print(f"✅ SOS logged | response={response_ms:.1f}ms", flush=True)
+        print(f"✅ SOS sent to backend | response={response_ms:.1f}ms", flush=True)
 
         press_count = 0
         last_press_time = 0
@@ -70,7 +59,7 @@ def handle_press():
 
 button.when_pressed = handle_press
 
-global_logger.start()
+
 
 print("=" * 40, flush=True)
 print("Pi 5 Emergency System Active", flush=True)
