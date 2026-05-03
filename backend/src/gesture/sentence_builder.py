@@ -1,7 +1,7 @@
 import time
 import csv
 import os
-from typing import List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Tuple, Set, FrozenSet
 
 
 class SentenceBuilder:
@@ -21,11 +21,9 @@ class SentenceBuilder:
             "UNDERSTAND", "KNOW", "LIKE", "LOVE", "NEED"
         }
 
-        self.standalone_phrases = {
-            "HELLO", "GOODBYE", "THANKS", "SORRY",
-            "YES", "NO", "OKAY", "GOOD",
-            "GOOD MORNING", "GOOD AFTERNOON"
-        }
+        # These are structural helpers only. The output phrases themselves now come from phrases.csv.
+        self.standalone_phrases: Set[str] = set()
+        self.phrase_token_sets: Set[FrozenSet[str]] = set()
 
         self.ignore_tokens = {
             "WAITING", "COLLECTING...", "BUFFERING...", "UNKNOWN",
@@ -74,49 +72,45 @@ class SentenceBuilder:
             "GOOD AFTERNOON": "good afternoon",
         }
 
-        # ----------------------------------------------------------
-        # Load CSV phrases into a lookup dict: frozenset -> output
-        # CSV is loaded alongside this file (same directory).
-        # Falls back gracefully if the file is missing.
-        # ----------------------------------------------------------
-        self.csv_phrases: dict = {}
+        self.csv_phrases: Dict[FrozenSet[str], str] = {}
         csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "phrases.csv")
         self._load_csv_phrases(csv_path)
 
-    # ------------------------------------------------------------
-    # CSV loader
-    # ------------------------------------------------------------
     def _load_csv_phrases(self, csv_path: str) -> None:
-        """Read phrases.csv and store each row as frozenset(tokens) -> output string.
-        Lines starting with '#' are treated as comments and skipped.
+        """Read phrases.csv.
+
         Expected columns: category, token_set, output
-        token_set uses '|' as delimiter (e.g. "I|WANT|EAT").
+        token_set uses | as delimiter, for example: I|WANT|EAT
+        Lines starting with # are skipped.
         """
         if not os.path.exists(csv_path):
             return
- 
+
         with open(csv_path, newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
             for row in reader:
-                # Skip blank lines or comment lines
                 if not row or row[0].strip().startswith("#"):
                     continue
                 if len(row) < 3:
                     continue
- 
-                category, token_str, output = row[0].strip(), row[1].strip(), row[2].strip()
- 
-                # Strip surrounding quotes from token_str if present
-                token_str = token_str.strip('"').strip("'")
-                output = output.strip('"').strip("'")
- 
-                tokens = frozenset(t.strip() for t in token_str.split("|") if t.strip())
-                if tokens and output:
-                    self.csv_phrases[tokens] = output
 
-    # ------------------------------------------------------------
-    # Token collection
-    # ------------------------------------------------------------
+                category = row[0].strip().lower()
+                token_str = row[1].strip().strip('"').strip("'")
+                output = row[2].strip().strip('"').strip("'")
+
+                if token_str.lower() == "token_set":
+                    continue
+
+                tokens = frozenset(t.strip().upper() for t in token_str.split("|") if t.strip())
+                if not tokens or not output:
+                    continue
+
+                self.csv_phrases[tokens] = output
+                self.phrase_token_sets.add(tokens)
+
+                if category == "standalone" or len(tokens) == 1:
+                    self.standalone_phrases.update(tokens)
+
     def add_token(self, token: str) -> Optional[Tuple[str, str]]:
         now = time.time()
         token = token.strip().upper()
@@ -124,7 +118,6 @@ class SentenceBuilder:
         if token in self.ignore_tokens:
             return None
 
-        # Allows repeated words like HELLO HELLO HELLO
         self.tokens.append(token)
         self.last_token_time = now
 
@@ -164,9 +157,6 @@ class SentenceBuilder:
         self.pause_start_time = None
         self.last_token_time = None
 
-    # ------------------------------------------------------------
-    # Main expansion
-    # ------------------------------------------------------------
     def expand(self, raw: str) -> str:
         toks = [t for t in raw.upper().split() if t]
         if not toks:
@@ -177,8 +167,7 @@ class SentenceBuilder:
 
         rendered = []
         for i, chunk in enumerate(chunks):
-            out = self._render_single_chunk(
-                chunk, is_last=(i == len(chunks) - 1))
+            out = self._render_single_chunk(chunk, is_last=(i == len(chunks) - 1))
             if out:
                 rendered.append(out)
 
@@ -189,8 +178,9 @@ class SentenceBuilder:
         i = 0
 
         while i < len(toks):
-            if toks[i] == "GOOD" and i + 1 < len(toks) and toks[i + 1] in {"MORNING", "AFTERNOON"}:
-                merged.append(f"GOOD {toks[i + 1]}")
+            two_word = f"{toks[i]} {toks[i + 1]}" if i + 1 < len(toks) else None
+            if two_word and frozenset([two_word]) in self.csv_phrases:
+                merged.append(two_word)
                 i += 2
             else:
                 merged.append(toks[i])
@@ -198,9 +188,6 @@ class SentenceBuilder:
 
         return merged
 
-    # ------------------------------------------------------------
-    # Chunk splitting
-    # ------------------------------------------------------------
     def _split_into_chunks(self, toks: List[str]) -> List[List[str]]:
         if not toks:
             return []
@@ -225,13 +212,7 @@ class SentenceBuilder:
         return self._postprocess_chunks(chunks)
 
     def _should_start_new_chunk(self, current: List[str], tok: str) -> bool:
-        starters = {
-            "PLEASE", "HELLO", "GOODBYE", "THANKS", "SORRY",
-            "YES", "NO", "OKAY", "GOOD", "GOOD MORNING", "GOOD AFTERNOON"
-        }
-
-        if tok in self.question_words and self._chunk_has_meaning(current):
-            return True
+        starters = {"PLEASE"} | self.question_words | self.standalone_phrases
 
         if tok in starters and self._chunk_has_meaning(current):
             return True
@@ -242,43 +223,15 @@ class SentenceBuilder:
         if not chunk:
             return False
 
-        token_set = set(chunk)
+        token_set = frozenset(chunk)
+
+        if token_set in self.csv_phrases:
+            return True
 
         if len(chunk) == 1 and chunk[0] in self.standalone_phrases:
             return True
 
         if chunk[0] in self.question_words and len(chunk) >= 2:
-            return True
-
-        known_patterns = [
-            {"I", "NO", "KNOW"},
-            {"NO", "KNOW"},
-            {"I", "FROM", "HERE"},
-            {"YES", "I", "FROM", "HERE"},
-            {"PLEASE", "GO", "ME"},
-            {"GO", "ME"},
-            {"I", "LOVE", "YOU"},
-            {"LOVE", "YOU"},
-            {"I", "LOVE", "FAMILY"},
-            {"I", "LOVE", "ME", "FAMILY"},
-            {"LOVE", "FAMILY"},
-            {"LOVE", "ME", "FAMILY"},
-            {"ME", "NAME"},
-            {"I", "WANT", "HELP"},
-            {"WANT", "HELP"},
-            {"I", "WANT", "HELP", "YOU"},
-            {"WANT", "HELP", "YOU"},
-            {"HELP", "YOU"},
-            {"I", "WANT", "SLEEP"},
-            {"WANT", "SLEEP"},
-            {"I", "WANT", "EAT"},
-            {"WANT", "EAT"},
-            {"I", "WANT", "GO", "HOME"},
-            {"WANT", "GO", "HOME"},
-            {"GO", "HOME"},
-        ]
-
-        if token_set in known_patterns:
             return True
 
         return len(chunk) >= 3
@@ -309,11 +262,8 @@ class SentenceBuilder:
             and chunk[0] not in self.question_words
         )
 
-    # ------------------------------------------------------------
-    # Rendering
-    # ------------------------------------------------------------
     def _render_single_chunk(self, chunk: List[str], is_last: bool = False) -> str:
-        exact = self._render_exact(chunk, is_last=is_last)
+        exact = self._render_exact(chunk)
         if exact:
             return exact
 
@@ -323,207 +273,30 @@ class SentenceBuilder:
 
         return self._grammar_fallback_strict(chunk, is_last=is_last)
 
-    def _render_exact(self, chunk: List[str], is_last: bool = False) -> Optional[str]:
-        token_set = set(chunk)
-
-        # -------------------------------------------------------
-        # Check CSV phrases FIRST before hardcoded rules.
-        # New phrases loaded from phrases.csv are matched here.
-        # -------------------------------------------------------
+    def _render_exact(self, chunk: List[str]) -> Optional[str]:
         frozen = frozenset(chunk)
         if frozen in self.csv_phrases:
             return self.csv_phrases[frozen]
 
-        # Repeated standalone words
-        if all(tok == "HELLO" for tok in chunk):
-            return " ".join(["Hello!"] * len(chunk))
-        if all(tok == "GOODBYE" for tok in chunk):
-            return " ".join(["Goodbye!"] * len(chunk))
-        if all(tok == "THANKS" for tok in chunk):
-            return " ".join(["Thank you."] * len(chunk))
-        if all(tok == "SORRY" for tok in chunk):
-            return " ".join(["Sorry."] * len(chunk))
-        if all(tok == "YES" for tok in chunk):
-            return " ".join(["Yes."] * len(chunk))
-        if all(tok == "NO" for tok in chunk):
-            return " ".join(["No."] * len(chunk))
-        if all(tok == "OKAY" for tok in chunk):
-            return " ".join(["Okay."] * len(chunk))
-        if all(tok == "GOOD" for tok in chunk):
-            return " ".join(["Good."] * len(chunk))
-
-        # Standalone
-        if chunk == ["GOOD MORNING"]:
-            return "Good morning!"
-        if chunk == ["GOOD AFTERNOON"]:
-            return "Good afternoon!"
-
-        # Questions
-        if token_set == {"WHAT", "NAME"} or token_set == {"WHAT", "YOU", "NAME"}:
-            return "What is your name?"
-        if token_set == {"WHERE", "FROM"} or token_set == {"WHERE", "YOU", "FROM"}:
-            return "Where are you from?"
-        if token_set == {"WHY", "HERE"} or token_set == {"WHY", "YOU", "HERE"}:
-            return "Why are you here?"
-        if token_set == {"HOW", "YOU"}:
-            return "How are you?"
-        if token_set == {"HOW", "YOU", "TODAY"} or token_set == {"HOW", "TODAY"}:
-            return "How are you today?"
-        if token_set == {"WHAT", "LIKE"} or token_set == {"WHAT", "YOU", "LIKE"}:
-            return "What do you like?"
-        if token_set == {"WHAT", "UNDERSTAND"} or token_set == {"WHAT", "YOU", "UNDERSTAND"}:
-            return "What did you understand?"
-
-        # ME -> MY cases
-        if token_set == {"ME", "NAME"}:
-            return "My name."
-        if token_set == {"I", "LOVE", "ME", "FAMILY"}:
-            return "I love my family."
-        if token_set == {"LOVE", "ME", "FAMILY"}:
-            return "Love my family."
-
-        # Statements
-        if token_set == {"I", "NO", "KNOW"}:
-            return "I do not know."
-        if token_set == {"NO", "KNOW"}:
-            return "Do not know."
-
-        if token_set == {"PLEASE", "GO", "ME"}:
-            return "Please go with me."
-        if token_set == {"GO", "ME"}:
-            return "Go with me."
-
-        if token_set == {"I", "LOVE", "YOU"}:
-            return "I love you."
-        if token_set == {"LOVE", "YOU"}:
-            return "Love you."
-
-        if token_set == {"I", "LOVE", "FAMILY"}:
-            return "I love my family."
-        if token_set == {"LOVE", "FAMILY"}:
-            return "Love family."
-
-        if token_set == {"I", "WANT", "HELP"}:
-            return "I want help."
-        if token_set == {"WANT", "HELP"}:
-            return "Want help."
-        if token_set == {"I", "WANT", "HELP", "YOU"}:
-            return "I want to help you."
-        if token_set == {"WANT", "HELP", "YOU"}:
-            return "Want to help you."
-        if token_set == {"HELP", "YOU"}:
-            return "Help you."
-
-        if token_set == {"I", "WANT", "SLEEP"}:
-            return "I want to sleep."
-        if token_set == {"WANT", "SLEEP"}:
-            return "Want to sleep."
-
-        if token_set == {"I", "WANT", "EAT"}:
-            return "I want to eat."
-        if token_set == {"WANT", "EAT"}:
-            return "Want to eat."
-
-        if token_set == {"I", "WANT", "GO", "HOME"}:
-            return "I want to go home."
-        if token_set == {"WANT", "GO", "HOME"}:
-            return "Want to go home."
-        if token_set == {"GO", "HOME"}:
-            return "Go home."
-
-        # YES-prefixed statements
-        if token_set == {"YES", "I", "WANT", "SLEEP"}:
-            return "Yes. I want to sleep."
-        if token_set == {"YES", "WANT", "SLEEP"}:
-            return "Yes. Want to sleep."
-        if token_set == {"YES", "I", "WANT", "EAT"}:
-            return "Yes. I want to eat."
-        if token_set == {"YES", "WANT", "EAT"}:
-            return "Yes. Want to eat."
-        if token_set == {"YES", "I", "WANT", "GO", "HOME"}:
-            return "Yes. I want to go home."
-        if token_set == {"YES", "WANT", "GO", "HOME"}:
-            return "Yes. Want to go home."
-        if token_set == {"YES", "I", "WANT", "HELP"}:
-            return "Yes. I want help."
-        if token_set == {"YES", "WANT", "HELP"}:
-            return "Yes. Want help."
-        if token_set == {"YES", "I", "WANT", "HELP", "YOU"}:
-            return "Yes. I want to help you."
-        if token_set == {"YES", "WANT", "HELP", "YOU"}:
-            return "Yes. Want to help you."
-        if token_set == {"YES", "I", "LOVE", "ME", "FAMILY"}:
-            return "Yes. I love my family."
-        if token_set == {"YES", "I", "FROM", "HERE"}:
-            return "Yes, I'm from here."
-        if token_set == {"I", "FROM", "HERE"}:
-            return "I'm from here."
+        # Generic repeated phrase support. Example: HELLO HELLO -> Hello! Hello!
+        if chunk and all(tok == chunk[0] for tok in chunk):
+            single = frozenset([chunk[0]])
+            if single in self.csv_phrases:
+                return " ".join([self.csv_phrases[single]] * len(chunk))
 
         return None
 
     def _render_fuzzy(self, chunk: List[str]) -> Optional[str]:
         token_set = set(chunk)
-
-        # -------------------------------------------------------
-        # Check CSV phrases with fuzzy scoring BEFORE hardcoded
-        # candidates. New CSV entries participate in fuzzy match.
-        # -------------------------------------------------------
-        best_csv_output = None
-        best_csv_score = 0.0
-        for frozen_set, output in self.csv_phrases.items():
-            score = self._grammar_similarity_score(token_set, set(frozen_set), output)
-            if score > best_csv_score:
-                best_csv_score = score
-                best_csv_output = output
-
-        candidates = [
-            ({"WHAT", "YOU", "NAME"}, "What is your name?"),
-            ({"WHAT", "NAME"}, "What is your name?"),
-            ({"WHERE", "YOU", "FROM"}, "Where are you from?"),
-            ({"WHERE", "FROM"}, "Where are you from?"),
-            ({"WHY", "YOU", "HERE"}, "Why are you here?"),
-            ({"WHY", "HERE"}, "Why are you here?"),
-            ({"WHO", "ME", "FRIEND"}, "Who is my friend?"),
-            ({"HOW", "YOU", "TODAY"}, "How are you today?"),
-            ({"HOW", "YOU"}, "How are you?"),
-            ({"ME", "NAME"}, "My name."),
-            ({"I", "LOVE", "ME", "FAMILY"}, "I love my family."),
-            ({"LOVE", "ME", "FAMILY"}, "Love my family."),
-            ({"I", "NO", "KNOW"}, "I do not know."),
-            ({"NO", "KNOW"}, "Do not know."),
-            ({"PLEASE", "GO", "ME"}, "Please go with me."),
-            ({"GO", "ME"}, "Go with me."),
-            ({"I", "LOVE", "YOU"}, "I love you."),
-            ({"LOVE", "YOU"}, "Love you."),
-            ({"I", "LOVE", "FAMILY"}, "I love my family."),
-            ({"LOVE", "FAMILY"}, "Love family."),
-            ({"I", "WANT", "HELP"}, "I want help."),
-            ({"WANT", "HELP"}, "Want help."),
-            ({"I", "WANT", "HELP", "YOU"}, "I want to help you."),
-            ({"WANT", "HELP", "YOU"}, "Want to help you."),
-            ({"HELP", "YOU"}, "Help you."),
-            ({"I", "WANT", "SLEEP"}, "I want to sleep."),
-            ({"WANT", "SLEEP"}, "Want to sleep."),
-            ({"I", "WANT", "EAT"}, "I want to eat."),
-            ({"WANT", "EAT"}, "Want to eat."),
-            ({"I", "WANT", "GO", "HOME"}, "I want to go home."),
-            ({"WANT", "GO", "HOME"}, "Want to go home."),
-            ({"GO", "HOME"}, "Go home."),
-        ]
-
         best_output = None
         best_score = 0.0
 
-        for expected_set, output in candidates:
-            score = self._grammar_similarity_score(
-                token_set, expected_set, output)
+        for expected_tokens, output in self.csv_phrases.items():
+            score = self._grammar_similarity_score(token_set, set(expected_tokens), output)
             if score > best_score:
                 best_score = score
                 best_output = output
 
-        # Return whichever scored higher: CSV or hardcoded
-        if best_csv_score >= 0.72 and best_csv_score >= best_score:
-            return best_csv_output
         return best_output if best_score >= 0.72 else None
 
     def _grammar_similarity_score(self, chunk_set: Set[str], expected_set: Set[str], output: str) -> float:
@@ -546,9 +319,6 @@ class SentenceBuilder:
 
         return score
 
-    # ------------------------------------------------------------
-    # Strict grammar fallback
-    # ------------------------------------------------------------
     def _grammar_fallback_strict(self, chunk: List[str], is_last: bool = False) -> str:
         if not chunk:
             return ""
@@ -558,9 +328,8 @@ class SentenceBuilder:
             text = " ".join(transformed).capitalize()
             return text + "?"
 
-        token_set = set(chunk)
-        yes_prefix = "YES" in token_set
-        please_prefix = "PLEASE" in token_set
+        yes_prefix = "YES" in chunk
+        please_prefix = "PLEASE" in chunk
 
         working = [tok for tok in chunk if tok not in {"YES", "PLEASE"}]
         transformed = self._reorder_without_adding_dataset_words(working)
@@ -589,55 +358,12 @@ class SentenceBuilder:
         if not chunk:
             return []
 
-        token_set = set(chunk)
-
-        # Specific safe transforms
-        if token_set == {"LOVE", "YOU"}:
-            return ["love", "you"]
-        if token_set == {"I", "LOVE", "YOU"} or chunk == ["LOVE", "I", "YOU"]:
-            return ["I", "love", "you"]
-
-        if token_set == {"NO", "KNOW"}:
-            return ["do", "not", "know"]
-        if token_set == {"I", "NO", "KNOW"}:
-            return ["I", "do", "not", "know"]
-
-        if token_set == {"GO", "ME"}:
-            return ["go", "with", "me"]
-
-        if token_set == {"WANT", "SLEEP"}:
-            return ["want", "to", "sleep"]
-        if token_set == {"I", "WANT", "SLEEP"}:
-            return ["I", "want", "to", "sleep"]
-
-        if token_set == {"WANT", "EAT"}:
-            return ["want", "to", "eat"]
-        if token_set == {"I", "WANT", "EAT"}:
-            return ["I", "want", "to", "eat"]
-
-        if token_set == {"WANT", "GO", "HOME"}:
-            return ["want", "to", "go", "home"]
-        if token_set == {"I", "WANT", "GO", "HOME"}:
-            return ["I", "want", "to", "go", "home"]
-
-        if token_set == {"WANT", "HELP"}:
-            return ["want", "help"]
-        if token_set == {"I", "WANT", "HELP"}:
-            return ["I", "want", "help"]
-        if token_set == {"HELP", "YOU"}:
-            return ["help", "you"]
-        if token_set == {"WANT", "HELP", "YOU"}:
-            return ["want", "to", "help", "you"]
-        if token_set == {"I", "WANT", "HELP", "YOU"}:
-            return ["I", "want", "to", "help", "you"]
-
-        # General subject-verb-object reorder
         subject = None
         verb = None
         remainder = []
 
         for tok in chunk:
-            if subject is None and tok in {"I", "YOU", "ME"}:
+            if subject is None and tok in self.subject_words:
                 subject = self.word_map.get(tok, tok.lower())
             elif verb is None and tok in self.verb_words:
                 verb = self.word_map.get(tok, tok.lower())
@@ -645,19 +371,12 @@ class SentenceBuilder:
                 remainder.append(self.word_map.get(tok, tok.lower()))
 
         if subject and verb:
-            if verb == "want" and remainder:
-                base = [subject, "want"] + remainder
-            else:
-                base = [subject, verb] + remainder
+            base = [subject, verb] + remainder
         elif verb and remainder:
-            if verb == "want":
-                base = ["want"] + remainder
-            else:
-                base = [verb] + remainder
+            base = [verb] + remainder
         else:
             base = [self.word_map.get(tok, tok.lower()) for tok in chunk]
 
-        # ME -> MY when before a noun-like word
         converted = []
         for i, word in enumerate(base):
             if word == "me" and i + 1 < len(base):
