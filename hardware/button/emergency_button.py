@@ -3,6 +3,9 @@ from tts.tts_engine import EmergencyAudio
 import time
 from signal import pause
 import requests
+import sys
+sys.path.insert(0, "/home/sms/Echify-App/backend") 
+from session_logger import global_logger       
 
 audio = EmergencyAudio("help_me.mp3")
 
@@ -43,13 +46,26 @@ def handle_press():
     if press_count >= 3:
         print("🚨 Triple Press Detected! Playing 'Help me!'...", flush=True)
 
+        t0 = time.monotonic()          # ← start timer
         audio.play_help_instant()
+        response_ms = (time.monotonic() - t0) * 1000 
+        
         notify_app()
+
+        # ← log to session logger
+        global_logger.log_sos(
+            response_time_ms=response_ms,
+            state="triggered",
+            success=True,
+            notes="physical_button triple_press"
+        )
 
         press_count = 0
         last_press_time = 0
 
 button.when_pressed = handle_press
+
+global_logger.start()
 
 print("=" * 40, flush=True)
 print("Pi 5 Emergency System Active", flush=True)
