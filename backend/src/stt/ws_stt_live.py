@@ -69,7 +69,6 @@ async def stt_live_endpoint(websocket: WebSocket):
     client_id = f"{websocket.client.host}:{websocket.client.port}"
     print(f"🎤 Client connected to /ws/stt-live | {client_id}")
 
-    # ── Mark reconnect in the global CSV ──────────────────────────────────
     global_logger.log_reconnect("STT", client_id)
 
     try:
@@ -77,115 +76,136 @@ async def stt_live_endpoint(websocket: WebSocket):
     except Exception as e:
         await websocket.send_json({
             "type": "error",
-            "message": f"Failed to load STT model: {str(e)}"
+            "message": f"Failed to load STT model: {str(e)}",
         })
         await websocket.close()
         return
 
-    is_listening    = False
+    is_listening = False
     recorded_chunks = []
-    dbfs_samples    = []        # dBFS readings collected while recording
-    rec_start       = 0.0
-    stop_event      = asyncio.Event()
+    dbfs_samples = []
+    rec_start = 0.0
+    stop_event = asyncio.Event()
+
+    async def transcribe_and_send(environment="auto", reference=None, auto_stop=False):
+        nonlocal recorded_chunks, dbfs_samples, rec_start
+
+        rec_duration = time.monotonic() - rec_start
+
+        audio = (
+            np.concatenate(recorded_chunks)
+            if recorded_chunks
+            else np.array([], dtype=np.float32)
+        )
+
+        avg_dbfs = (
+            round(sum(dbfs_samples) / len(dbfs_samples), 2)
+            if dbfs_samples
+            else None
+        )
+
+        text = ""
+        stt_latency = 0.0
+        success = False
+
+        print(f"🧪 Recorded chunks: {len(recorded_chunks)}")
+        print(f"🧪 Audio samples  : {len(audio)}")
+
+        if len(audio) > 0:
+            print(f"🧪 Max amplitude  : {float(np.max(np.abs(audio))):.4f}")
+
+        if rec_duration >= 0.5 and len(audio) > 0:
+            try:
+                t0 = time.monotonic()
+                text = await asyncio.to_thread(transcribe_samples, audio)
+                stt_latency = (time.monotonic() - t0) * 1000
+                success = True
+
+                print(
+                    f"🧪 Transcript: \"{text}\" | "
+                    f"latency={stt_latency:.1f}ms | dBFS={avg_dbfs}"
+                )
+
+            except Exception as e:
+                print(f"❌ STT transcription error: {e}")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"STT transcription error: {str(e)}",
+                })
+                return
+
+        if success:
+            global_logger.log_stt(
+                transcript=text,
+                stt_latency_ms=stt_latency,
+                reference=reference,
+                environment=environment,
+                dbfs=avg_dbfs,
+                notes=(
+                    f"client={client_id}|"
+                    f"duration={rec_duration:.2f}s|"
+                    f"chunks={len(recorded_chunks)}|"
+                    f"auto_stop={auto_stop}"
+                ),
+            )
+
+        await websocket.send_json({
+            "type": "transcript",
+            "text": text if text else "…",
+            "dbfs": avg_dbfs,
+            "latency_ms": round(stt_latency, 2),
+        })
+
+        recorded_chunks = []
+        dbfs_samples = []
 
     async def receiver():
         nonlocal is_listening, recorded_chunks, dbfs_samples, rec_start
 
         while not stop_event.is_set():
-            raw  = await websocket.receive_text()
+            raw = await websocket.receive_text()
             data = json.loads(raw)
 
-            action      = data.get("action")
-            environment = data.get("environment", "quiet")   # "quiet" | "noisy"
-            reference   = data.get("reference", None)        # ground-truth for WER
+            action = data.get("action")
+            environment = data.get("environment", "quiet")
+            reference = data.get("reference", None)
 
             if action == "start":
                 print(f"🎙 STT start | env={environment} | client={client_id}")
-                is_listening    = True
+
+                is_listening = True
                 recorded_chunks = []
-                dbfs_samples    = []
-                rec_start       = time.monotonic()
+                dbfs_samples = []
+                rec_start = time.monotonic()
+
                 shared_mic.drain_chunks()
 
                 await websocket.send_json({
                     "type": "status",
-                    "message": "Listening started"
+                    "message": "Listening started",
                 })
 
             elif action == "stop":
                 print(f"🛑 STT stop | client={client_id}")
                 is_listening = False
-
-                rec_duration = time.monotonic() - rec_start
-
-                audio = (
-                    np.concatenate(recorded_chunks)
-                    if recorded_chunks
-                    else np.array([], dtype=np.float32)
+                await transcribe_and_send(
+                    environment=environment,
+                    reference=reference,
+                    auto_stop=False,
                 )
-
-                print(f"🧪 Recorded chunks: {len(recorded_chunks)}")
-                print(f"🧪 Audio samples  : {len(audio)}")
-                if len(audio) > 0:
-                    print(f"🧪 Max amplitude  : {float(np.max(np.abs(audio))):.4f}")
-
-                # Average dBFS across the whole recording
-                avg_dbfs = (
-                    round(sum(dbfs_samples) / len(dbfs_samples), 2)
-                    if dbfs_samples else None
-                )
-
-                text         = ""
-                stt_latency  = 0.0
-                success      = False
-
-                if len(audio) > 0:
-                    try:
-                        t0          = time.monotonic()
-                        text        = await asyncio.to_thread(transcribe_samples, audio)
-                        stt_latency = (time.monotonic() - t0) * 1000
-                        success     = True
-                        print(
-                            f"🧪 Transcript: \"{text}\" | "
-                            f"latency={stt_latency:.1f}ms | "
-                            f"dBFS={avg_dbfs}"
-                        )
-                    except Exception as e:
-                        print(f"❌ STT transcription error: {e}")
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": f"STT transcription error: {str(e)}"
-                        })
-                        continue
-
-                # ── Log STT row into the ONE global CSV ───────────────────
-                if success:
-                    global_logger.log_stt(
-                        transcript=text,
-                        stt_latency_ms=stt_latency,
-                        reference=reference,
-                        environment=environment,
-                        dbfs=avg_dbfs,
-                        notes=(
-                            f"client={client_id}|"
-                            f"duration={rec_duration:.2f}s|"
-                            f"chunks={len(recorded_chunks)}"
-                        ),
-                    )
-
-                await websocket.send_json({
-                    "type":    "transcript",
-                    "text":    text if text else "…",
-                    "dbfs":    avg_dbfs,
-                    "latency_ms": round(stt_latency, 2),
-                })
 
     async def sender():
         nonlocal is_listening, recorded_chunks, dbfs_samples, rec_start
 
-        LOUD_THRESHOLD = 0.01
+        # IMPORTANT:
+        # Check your terminal silent level.
+        # If silence prints around 0.0120, set threshold around 0.018–0.020.
+        LOUD_THRESHOLD = 0.02
+
+        # Auto-transcribe after this many seconds of silence.
         SILENCE_SECONDS = 1.0
-        MIN_RECORD_SECONDS = 0.5
+
+        CHUNK_INTERVAL = 0.1
 
         speech_started = False
         last_loud_time = 0.0
@@ -193,94 +213,42 @@ async def stt_live_endpoint(websocket: WebSocket):
         while not stop_event.is_set():
             level = shared_mic.get_level()
             chunks = shared_mic.drain_chunks()
-
-            print(f"Level: {level:.4f}")  
-
             now = time.monotonic()
+
+            print(f"Silence Level: {level:.4f}")
 
             if is_listening and chunks:
                 is_loud = level >= LOUD_THRESHOLD
 
                 if is_loud:
-                    speech_started = True
+                    if not speech_started:
+                        print("🗣 Speech started")
+                        speech_started = True
+
                     last_loud_time = now
+
+                # Once speech starts, record everything:
+                # loud speech + quiet speech + silence tail.
+                if speech_started:
                     recorded_chunks.extend(chunks)
 
                     db = get_mic_dbfs(shared_mic)
                     if db is not None:
                         dbfs_samples.append(db)
 
-                elif speech_started:
                     silence_duration = now - last_loud_time
 
                     if silence_duration >= SILENCE_SECONDS:
-                        print("🤫 Silence detected for 3 seconds, auto-stopping STT")
+                        print("🤫 Silence detected, auto-transcribing STT")
 
                         is_listening = False
                         speech_started = False
 
-                        rec_duration = time.monotonic() - rec_start
-
-                        audio = (
-                            np.concatenate(recorded_chunks)
-                            if recorded_chunks
-                            else np.array([], dtype=np.float32)
+                        await transcribe_and_send(
+                            environment="auto",
+                            reference=None,
+                            auto_stop=True,
                         )
-
-                        avg_dbfs = (
-                            round(sum(dbfs_samples) / len(dbfs_samples), 2)
-                            if dbfs_samples else None
-                        )
-
-                        text = ""
-                        stt_latency = 0.0
-                        success = False
-
-                        if rec_duration >= MIN_RECORD_SECONDS and len(audio) > 0:
-                            try:
-                                t0 = time.monotonic()
-                                text = await asyncio.to_thread(transcribe_samples, audio)
-                                stt_latency = (time.monotonic() - t0) * 1000
-                                success = True
-
-                                print(
-                                    f"🧪 Auto Transcript: \"{text}\" | "
-                                    f"latency={stt_latency:.1f}ms | "
-                                    f"dBFS={avg_dbfs}"
-                                )
-
-                            except Exception as e:
-                                print(f"❌ STT transcription error: {e}")
-                                await websocket.send_json({
-                                    "type": "error",
-                                    "message": f"STT transcription error: {str(e)}"
-                                })
-                                continue
-
-                        if success:
-                            global_logger.log_stt(
-                                transcript=text,
-                                stt_latency_ms=stt_latency,
-                                reference=None,
-                                environment="auto",
-                                dbfs=avg_dbfs,
-                                notes=(
-                                    f"client={client_id}|"
-                                    f"duration={rec_duration:.2f}s|"
-                                    f"chunks={len(recorded_chunks)}|"
-                                    f"auto_stop=true"
-                                ),
-                            )
-
-                        await websocket.send_json({
-                            "type": "transcript",
-                            "text": text if text else "…",
-                            "dbfs": avg_dbfs,
-                            "latency_ms": round(stt_latency, 2),
-                        })
-
-                        recorded_chunks = []
-                        dbfs_samples = []
 
             await websocket.send_json({
                 "type": "level",
@@ -288,7 +256,8 @@ async def stt_live_endpoint(websocket: WebSocket):
                 "isRecording": is_listening,
             })
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(CHUNK_INTERVAL)
+
     receiver_task = asyncio.create_task(receiver())
     sender_task = asyncio.create_task(sender())
 
