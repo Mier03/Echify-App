@@ -52,12 +52,13 @@ def transcribe_samples(samples: np.ndarray) -> str:
     model = get_model()
     mono_16k = downsample_48k_to_16k(samples)
     segments, _ = model.transcribe(
-        mono_16k,
-        language="en",
-        vad_filter=False,
-        condition_on_previous_text=False,
-        beam_size=1,
-    )
+    mono_16k,
+    language="en",
+    vad_filter=True,
+    condition_on_previous_text=False,
+    beam_size=1,
+    no_speech_threshold=0.4,
+)
     text = " ".join(seg.text.strip() for seg in segments).strip()
     return text
 
@@ -183,38 +184,51 @@ async def stt_live_endpoint(websocket: WebSocket):
     async def sender():
         nonlocal is_listening, recorded_chunks, dbfs_samples, rec_start
 
-        LOUD_THRESHOLD = 0.01
-        SILENCE_SECONDS = 1.0
-        MIN_RECORD_SECONDS = 0.5
+        LOUD_THRESHOLD = 0.006      # lower for INMP441; tune 0.004–0.012
+        SILENCE_SECONDS = 1.0       # transcribe after 1 sec silence
+        MIN_RECORD_SECONDS = 0.4
+        PRE_ROLL_SECONDS = 0.3      # keeps beginning of speech
+        CHUNK_INTERVAL = 0.1
+        PRE_ROLL_CHUNKS = int(PRE_ROLL_SECONDS / CHUNK_INTERVAL)
 
         speech_started = False
         last_loud_time = 0.0
+        pre_roll = []
 
         while not stop_event.is_set():
             level = shared_mic.get_level()
             chunks = shared_mic.drain_chunks()
-
-            print(f"Level: {level:.4f}")  
-
             now = time.monotonic()
 
             if is_listening and chunks:
                 is_loud = level >= LOUD_THRESHOLD
 
+                # Always keep recent audio before speech starts
+                if not speech_started:
+                    pre_roll.extend(chunks)
+                    pre_roll = pre_roll[-PRE_ROLL_CHUNKS:]
+
                 if is_loud:
-                    speech_started = True
+                    if not speech_started:
+                        speech_started = True
+                        recorded_chunks.extend(pre_roll)
+                        pre_roll = []
+
                     last_loud_time = now
+
+                # Important: once speech starts, record ALL chunks,
+                # including quieter speech and silence tails.
+                if speech_started:
                     recorded_chunks.extend(chunks)
 
                     db = get_mic_dbfs(shared_mic)
                     if db is not None:
                         dbfs_samples.append(db)
 
-                elif speech_started:
                     silence_duration = now - last_loud_time
 
                     if silence_duration >= SILENCE_SECONDS:
-                        print("🤫 Silence detected for 3 seconds, auto-stopping STT")
+                        print("🤫 Silence detected for 1 second, auto-transcribing STT")
 
                         is_listening = False
                         speech_started = False
@@ -234,43 +248,33 @@ async def stt_live_endpoint(websocket: WebSocket):
 
                         text = ""
                         stt_latency = 0.0
-                        success = False
 
                         if rec_duration >= MIN_RECORD_SECONDS and len(audio) > 0:
                             try:
                                 t0 = time.monotonic()
                                 text = await asyncio.to_thread(transcribe_samples, audio)
                                 stt_latency = (time.monotonic() - t0) * 1000
-                                success = True
 
-                                print(
-                                    f"🧪 Auto Transcript: \"{text}\" | "
-                                    f"latency={stt_latency:.1f}ms | "
-                                    f"dBFS={avg_dbfs}"
+                                global_logger.log_stt(
+                                    transcript=text,
+                                    stt_latency_ms=stt_latency,
+                                    reference=None,
+                                    environment="auto",
+                                    dbfs=avg_dbfs,
+                                    notes=(
+                                        f"client={client_id}|"
+                                        f"duration={rec_duration:.2f}s|"
+                                        f"chunks={len(recorded_chunks)}|"
+                                        f"auto_stop=true"
+                                    ),
                                 )
 
                             except Exception as e:
-                                print(f"❌ STT transcription error: {e}")
                                 await websocket.send_json({
                                     "type": "error",
                                     "message": f"STT transcription error: {str(e)}"
                                 })
                                 continue
-
-                        if success:
-                            global_logger.log_stt(
-                                transcript=text,
-                                stt_latency_ms=stt_latency,
-                                reference=None,
-                                environment="auto",
-                                dbfs=avg_dbfs,
-                                notes=(
-                                    f"client={client_id}|"
-                                    f"duration={rec_duration:.2f}s|"
-                                    f"chunks={len(recorded_chunks)}|"
-                                    f"auto_stop=true"
-                                ),
-                            )
 
                         await websocket.send_json({
                             "type": "transcript",
@@ -281,6 +285,7 @@ async def stt_live_endpoint(websocket: WebSocket):
 
                         recorded_chunks = []
                         dbfs_samples = []
+                        pre_roll = []
 
             await websocket.send_json({
                 "type": "level",
@@ -288,36 +293,4 @@ async def stt_live_endpoint(websocket: WebSocket):
                 "isRecording": is_listening,
             })
 
-            await asyncio.sleep(0.1)
-    receiver_task = asyncio.create_task(receiver())
-    sender_task = asyncio.create_task(sender())
-
-    try:
-        done, pending = await asyncio.wait(
-            [receiver_task, sender_task],
-            return_when=asyncio.FIRST_EXCEPTION,
-        )
-
-        for task in done:
-            exc = task.exception()
-            if exc:
-                raise exc
-
-    except WebSocketDisconnect:
-        print(f"🔌 Client disconnected from /ws/stt-live | {client_id}")
-
-    except Exception as e:
-        print(f"❌ STT websocket error: {e}")
-        with contextlib.suppress(Exception):
-            await websocket.send_json({
-                "type": "error",
-                "message": str(e),
-            })
-
-    finally:
-        stop_event.set()
-
-        for task in (receiver_task, sender_task):
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await task
+            await asyncio.sleep(CHUNK_INTERVAL)
