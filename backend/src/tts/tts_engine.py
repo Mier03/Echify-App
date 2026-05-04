@@ -20,9 +20,12 @@ def speak(text: str):
         try:
             print(f"🔊 Speaking: {text}")
 
+            speaker = tts.speakers[0]
+
             tts.tts_to_file(
                 text=text,
-                file_path=str(OUTPUT_PATH)
+                file_path=str(OUTPUT_PATH),
+                speaker=speaker
             )
 
             subprocess.run(
