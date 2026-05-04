@@ -360,7 +360,7 @@ const handleSpeechStart = () => {
                       disabled={isSpeechListening}
                     >
                       <Text style={styles.toggleButtonText}>
-                        {isSpeechListening ? "..." : "Start"}
+                        {isSpeechListening ? "Listening..." : "Start"}
                       </Text>
                     </TouchableOpacity>
                 </View>
