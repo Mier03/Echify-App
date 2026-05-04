@@ -5,7 +5,7 @@ from pathlib import Path
 from TTS.api import TTS
 
 tts = TTS(
-    model_name="tts_models/en/vctk/vits",
+    model_name="tts_models/en/ljspeech/glow-tts",
     progress_bar=False
 )
 
@@ -13,23 +13,22 @@ OUTPUT_PATH = Path("/tmp/coqui_output.wav")
 
 
 def speak(text: str):
-    if not text or not text.strip():
+    text = text.strip()[:120]
+
+    if not text:
         return
 
     def _run():
         try:
             print(f"🔊 Speaking: {text}")
 
-            speaker = tts.speakers[0]
-
             tts.tts_to_file(
                 text=text,
-                file_path=str(OUTPUT_PATH),
-                speaker=speaker
+                file_path=str(OUTPUT_PATH)
             )
 
             subprocess.run(
-                ["aplay", "-D", "default", str(OUTPUT_PATH)],
+                ["aplay", str(OUTPUT_PATH)],
                 check=False
             )
 
