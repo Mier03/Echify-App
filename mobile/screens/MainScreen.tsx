@@ -191,7 +191,10 @@ export default function MainScreen() {
       if (data?.type === "level") {
         setIsRecording(!!data.isRecording);
       }
-
+       if (data?.type === "status") {
+        setSttText(data.message || "Processing...");
+        setIsRecording(false);
+      }
       if (data?.type === "transcript") {
         const text = (data.text || "").trim();
         setSttText(text || "…");
@@ -360,7 +363,7 @@ const handleSpeechStart = () => {
                       disabled={isSpeechListening}
                     >
                       <Text style={styles.toggleButtonText}>
-                        {isSpeechListening ? "Listening..." : "Start"}
+                        {isSpeechListening ? "..." : "Start"}
                       </Text>
                     </TouchableOpacity>
                 </View>

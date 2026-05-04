@@ -188,6 +188,7 @@ async def stt_live_endpoint(websocket: WebSocket):
             elif action == "stop":
                 print(f"🛑 STT stop | client={client_id}")
                 is_listening = False
+                
                 await transcribe_and_send(
                     environment=environment,
                     reference=reference,
@@ -203,7 +204,7 @@ async def stt_live_endpoint(websocket: WebSocket):
         LOUD_THRESHOLD = 0.02
 
         # Auto-transcribe after this many seconds of silence.
-        SILENCE_SECONDS = 1.0
+        SILENCE_SECONDS = 1.5
 
         CHUNK_INTERVAL = 0.1
 
@@ -244,6 +245,10 @@ async def stt_live_endpoint(websocket: WebSocket):
                         is_listening = False
                         speech_started = False
 
+                        await websocket.send_json({
+                            "type": "status",
+                            "message": "Transcribing..."
+                        })
                         await transcribe_and_send(
                             environment="auto",
                             reference=None,
