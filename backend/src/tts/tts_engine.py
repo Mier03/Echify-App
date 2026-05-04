@@ -1,84 +1,41 @@
 # tts_engine.py
 import subprocess
 import threading
-import queue
-import re
 from pathlib import Path
 from TTS.api import TTS
 
-# --- Model loaded once at import time (you already do this, good) ---
 tts = TTS(
-    model_name="tts_models/en/vctk/vits",
+    model_name="tts_models/en/ljspeech/glow-tts",
     progress_bar=False
 )
 
-SPEAKER = tts.speakers[0]
-TMP_DIR = Path("/tmp/coqui_chunks")
-TMP_DIR.mkdir(exist_ok=True)
-
-# Pre-warm: run a silent dummy inference so the first real call isn't cold
-def _prewarm():
-    try:
-        p = TMP_DIR / "_prewarm.wav"
-        tts.tts_to_file(text="hello", file_path=str(p), speaker=SPEAKER)
-    except Exception:
-        pass
-
-threading.Thread(target=_prewarm, daemon=True).start()
-
-
-def _split_sentences(text: str) -> list[str]:
-    """Split text into speakable chunks."""
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    return [s.strip() for s in sentences if s.strip()]
+OUTPUT_PATH = Path("/tmp/coqui_output.wav")
 
 
 def speak(text: str):
-    """
-    Pipeline: sentence chunks are generated and played in parallel.
-    Generation of chunk N+1 overlaps with playback of chunk N.
-    """
-    if not text or not text.strip():
+    text = text.strip()[:120]
+
+    if not text:
         return
 
-    chunks = _split_sentences(text)
-    audio_queue = queue.Queue()
-    SENTINEL = None
+    def _run():
+        try:
+            print(f"🔊 Speaking: {text}")
 
-    def _generate():
-        """Producer: synthesize each chunk and enqueue the wav path."""
-        for i, chunk in enumerate(chunks):
-            out_path = TMP_DIR / f"chunk_{i}.wav"
-            try:
-                tts.tts_to_file(
-                    text=chunk,
-                    file_path=str(out_path),
-                    speaker=SPEAKER,
-                )
-                audio_queue.put(str(out_path))
-            except Exception as e:
-                print(f"❌ TTS generation error: {e}")
-        audio_queue.put(SENTINEL)  # signal done
+            tts.tts_to_file(
+                text=text,
+                file_path=str(OUTPUT_PATH)
+            )
 
-    def _play():
-        """Consumer: play each wav as soon as it's ready."""
-        while True:
-            path = audio_queue.get()
-            if path is SENTINEL:
-                break
-            try:
-                subprocess.run(
-                    ["aplay", "-D", "default", path],
-                    check=False
-                )
-            except Exception as e:
-                print(f"❌ Playback error: {e}")
+            subprocess.run(
+                ["aplay", str(OUTPUT_PATH)],
+                check=False
+            )
 
-    gen_thread = threading.Thread(target=_generate, daemon=True)
-    play_thread = threading.Thread(target=_play, daemon=True)
+        except Exception as e:
+            print(f"❌ TTS error: {e}")
 
-    gen_thread.start()
-    play_thread.start()
+    threading.Thread(target=_run, daemon=True).start()
 
 
 class EmergencyAudio:
@@ -89,10 +46,12 @@ class EmergencyAudio:
         def _run():
             try:
                 print(f"🔊 Playing emergency audio: {self.wav_path}")
+
                 subprocess.run(
                     ["aplay", "-D", "default", self.wav_path],
                     check=False
                 )
+
             except Exception as e:
                 print(f"❌ Emergency audio error: {e}")
 
