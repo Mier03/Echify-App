@@ -3,30 +3,13 @@ import subprocess
 import threading
 from pathlib import Path
 from TTS.api import TTS
-from pydub import AudioSegment
 
 tts = TTS(
-    model_name="tts_models/en/ljspeech/tacotron2-DDC",
+    model_name="tts_models/en/vctk/vits",
     progress_bar=False
 )
 
 OUTPUT_PATH = Path("/tmp/coqui_output.wav")
-SLOW_OUTPUT_PATH = Path("/tmp/coqui_output_slow.wav")
-
-SPEECH_SPEED = 0.85
-
-
-def slow_down_wav(input_path, output_path, speed=0.85):
-    audio = AudioSegment.from_wav(input_path)
-
-    slowed = audio._spawn(
-        audio.raw_data,
-        overrides={
-            "frame_rate": int(audio.frame_rate * speed)
-        }
-    ).set_frame_rate(audio.frame_rate)
-
-    slowed.export(output_path, format="wav")
 
 
 def speak(text: str):
@@ -42,14 +25,8 @@ def speak(text: str):
                 file_path=str(OUTPUT_PATH)
             )
 
-            slow_down_wav(
-                OUTPUT_PATH,
-                SLOW_OUTPUT_PATH,
-                SPEECH_SPEED
-            )
-
             subprocess.run(
-                ["aplay", "-D", "default", str(SLOW_OUTPUT_PATH)],
+                ["aplay", "-D", "default", str(OUTPUT_PATH)],
                 check=False
             )
 
