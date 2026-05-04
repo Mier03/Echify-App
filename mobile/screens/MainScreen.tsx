@@ -191,22 +191,25 @@ export default function MainScreen() {
       if (data?.type === "level") {
         setIsRecording(!!data.isRecording);
       }
-       if (data?.type === "status") {
-        setSttText(data.message || "Processing...");
-        setIsRecording(false);
-      }
+      if (data?.type === "status") {
+          setSttText(data.message || "Processing...");
+
+          if (data.message === "Transcribing...") {
+            setIsRecording(false);
+          }
+        }
       if (data?.type === "transcript") {
         const text = (data.text || "").trim();
         setSttText(text || "…");
         setIsSpeechListening(false);
         setIsRecording(false);
-      }
+        }
 
       if (data?.type === "error") {
         setSttText(data.message || "STT error.");
         setIsRecording(false);
         setIsSpeechListening(false);
-      }
+        }
     });
 
     return () => {
