@@ -163,15 +163,26 @@ class SentenceBuilder:
             return ""
 
         toks = self._merge_phrases(toks)
-        chunks = self._split_into_chunks(toks)
 
+        # 1) Always prioritize phrases.csv. Check the entire signed sequence first.
+        exact = self._render_exact(toks)
+        if exact:
+            return exact
+
+        # 2) Then try exact CSV matches per chunk, so combined phrases like
+        #    HELLO I WANT EAT can become: Hello! I want to eat.
+        chunks = self._split_into_chunks(toks)
         rendered = []
-        for i, chunk in enumerate(chunks):
-            out = self._render_single_chunk(chunk, is_last=(i == len(chunks) - 1))
+        for chunk in chunks:
+            out = self._render_exact(chunk)
             if out:
                 rendered.append(out)
+            else:
+                # 3) If it is not in phrases.csv, show only the actual signed words.
+                #    Do not use fuzzy matching or grammar that adds words.
+                rendered.append(self._literal_signed_words(chunk))
 
-        return " ".join(rendered) if rendered else self._literal_render(toks)
+        return " ".join(part for part in rendered if part).strip()
 
     def _merge_phrases(self, toks: List[str]) -> List[str]:
         merged = []
@@ -213,6 +224,11 @@ class SentenceBuilder:
 
     def _should_start_new_chunk(self, current: List[str], tok: str) -> bool:
         starters = {"PLEASE"} | self.question_words | self.standalone_phrases
+
+        # Keep standalone CSV phrases separate from the next signed words.
+        # Example: HELLO I WANT EAT -> Hello! I want to eat.
+        if len(current) == 1 and current[0] in self.standalone_phrases:
+            return True
 
         if tok in starters and self._chunk_has_meaning(current):
             return True
@@ -267,11 +283,7 @@ class SentenceBuilder:
         if exact:
             return exact
 
-        fuzzy = self._render_fuzzy(chunk)
-        if fuzzy:
-            return fuzzy
-
-        return self._grammar_fallback_strict(chunk, is_last=is_last)
+        return self._literal_signed_words(chunk)
 
     def _render_exact(self, chunk: List[str]) -> Optional[str]:
         frozen = frozenset(chunk)
@@ -387,7 +399,25 @@ class SentenceBuilder:
 
         return converted
 
-    def _literal_render(self, chunk: List[str], force_question: bool = False) -> str:
+    def _literal_signed_words(self, chunk: List[str]) -> str:
+        """Render only the words that were actually signed.
+
+        This is used when there is no exact phrases.csv match. It intentionally
+        avoids fuzzy matching and grammar rules that can add words like are, do,
+        to, with, or my.
+        """
         words = [self.word_map.get(tok, tok.lower()) for tok in chunk]
-        text = " ".join(words).capitalize()
-        return text + ("?" if force_question else ".")
+        text = " ".join(words).strip()
+        if not text:
+            return ""
+
+        text = text[0].upper() + text[1:]
+        if not text.endswith((".", "!", "?")):
+            text += "."
+        return text
+
+    def _literal_render(self, chunk: List[str], force_question: bool = False) -> str:
+        text = self._literal_signed_words(chunk)
+        if force_question and text.endswith("."):
+            return text[:-1] + "?"
+        return text

@@ -10,16 +10,21 @@ standalone,OKAY,Okay.
 standalone,GOOD,Good.
 standalone,GOOD MORNING,Good morning!
 standalone,GOOD AFTERNOON,Good afternoon!
-question,WHAT|NAME,What is your name?
+question,WHAT|NAME,What is name?
+question,WHAT|NAME|YOU,What is your name?
 question,WHAT|YOU|NAME,What is your name?
-question,WHERE|FROM,Where are you from?
+question,WHERE|FROM,Where from?
 question,WHERE|YOU|FROM,Where are you from?
-question,WHY|HERE,Why are you here?
+question,WHERE|FROM|YOU,Where are you from?
+question,WHY|HERE,Why here?
 question,WHY|YOU|HERE,Why are you here?
+question,WHY|HERE|YOU,Why are you here?
 question,HOW|YOU,How are you?
+question,YOU|HOW,How are you?
 question,HOW|YOU|TODAY,How are you today?
-question,HOW|TODAY,How are you today?
-question,WHAT|LIKE,What do you like?
+question,HOW|TODAY,How today?
+question,WHAT|LIKE,What like?
+question,LIKE|WHAT,Like what?
 question,WHAT|YOU|LIKE,What do you like?
 question,WHAT|UNDERSTAND,What did you understand?
 question,WHAT|YOU|UNDERSTAND,What did you understand?
@@ -131,24 +136,32 @@ question,"WHY|HERE","Why are you here?"
 question,"WHY|YOU|HERE","Why are you here?"
 question,"HOW|YOU","How are you?"
 question,"HOW|YOU|TODAY","How are you today?"
-question,"HOW|TODAY","How are you today?"
-question,"WHAT|LIKE","What do you like?"
+question,"HOW|TODAY","How today?"
+question,"WHAT|LIKE","What like?"
+question,"LIKE|WHAT","Like what?"
 question,"WHAT|YOU|LIKE","What do you like?"
-question,"WHAT|UNDERSTAND","What did you understand?"
+question,"WHAT|UNDERSTAND","What understand?"
 question,"WHAT|YOU|UNDERSTAND","What did you understand?"
+question,"WHAT|UNDERSTAND|YOU","What did you understand?"
 # QUESTIONS (NEW)
 question,"WHO|YOU","Who are you?"
 question,"WHO|ME|FRIEND","Who is my friend?"
+question,"WHO|FRIEND|ME","Who is my friend?"
+question,"ME|FRIEND|WHO","Who is my friend?"
 question,"WHO|ME|FAMILY","Who is my family?"
+question,"WHO|FAMILY|ME","Who is my family?"
 question,"WHO|YOU|LIKE","Who do you like?"
 question,"WHO|YOU|LOVE","Who do you love?"
 question,"WHO|YOU|KNOW","Who do you know?"
 question,"WHO|HERE","Who is here?"
 question,"WHERE|YOU","Where are you?"
+question,"YOU|WHERE","Where are you?"
 question,"WHERE|HOME","Where is home?"
 question,"WHERE|ME|FAMILY","Where is my family?"
 question,"WHERE|ME|FRIEND","Where is my friend?"
 question,"WHERE|YOU|WANT|GO","Where do you want to go?"
+question,"WHERE|YOU|GO","Where are you going?"
+question,"YOU|GO|WHERE","Where are you going?"
 question,"WHERE|YOU|WANT|EAT","Where do you want to eat?"
 question,"WHERE|YOU|WANT|SLEEP","Where do you want to sleep?"
 question,"WHY|YOU|LIKE|ME","Why do you like me?"
