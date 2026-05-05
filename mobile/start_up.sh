@@ -31,6 +31,10 @@ pkill -f "camera_engine.py" 2>/dev/null
 pkill -x chromium 2>/dev/null
 pkill -f "$CHROME_PROFILE" 2>/dev/null
 
+# 🔄 Start loading screen immediately
+chromium-browser --kiosk file:///home/sms/Echify-App/loading.html &
+LOADING_PID=$!
+
 sleep 3
 
 echo "🧹 Cleaning old Chromium profile..."
@@ -169,6 +173,9 @@ if ! kill -0 $BUTTON_PID 2>/dev/null; then
 fi
 
 echo "✅ Button listener running"
+
+# ❌ Close loading screen before launching main app
+kill $LOADING_PID 2>/dev/null
 
 echo "🖥 Opening Chromium..."
 chromium \
