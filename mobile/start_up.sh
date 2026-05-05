@@ -5,16 +5,6 @@ BASE_DIR="/home/sms/Echify-App"
 MODEL_PATH="$BASE_DIR/backend/models"
 CHROME_PROFILE="/home/sms/.echify-profile"
 
-# ensure GUI access
-export DISPLAY=:0
-export XAUTHORITY=/home/sms/.Xauthority
-
-sleep 5
-
-# 🔄 Start loading screen immediately
-chromium --kiosk file:///home/sms/Echify-App/loading.html &
-LOADING_PID=$!
-
 echo "🔄 Updating project from GitHub..."
 cd "$BASE_DIR" || exit 1
 git fetch origin
@@ -38,8 +28,6 @@ pkill -f "emergency_button.py" 2>/dev/null
 pkill -f "python3 -m http.server 3000" 2>/dev/null
 pkill -f "uvicorn src.main:app --host 0.0.0.0 --port 8000" 2>/dev/null
 pkill -f "camera_engine.py" 2>/dev/null
-pkill -x chromium 2>/dev/null
-pkill -f "$CHROME_PROFILE" 2>/dev/null
 
 sleep 3
 
@@ -181,7 +169,7 @@ fi
 echo "✅ Button listener running"
 
 # ❌ Close loading screen before launching main app
-kill $LOADING_PID 2>/dev/null
+pkill -f "loading.html" 2>/dev/null
 
 echo "🖥 Opening Chromium..."
 chromium \
