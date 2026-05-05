@@ -31,8 +31,14 @@ pkill -f "camera_engine.py" 2>/dev/null
 pkill -x chromium 2>/dev/null
 pkill -f "$CHROME_PROFILE" 2>/dev/null
 
+# ensure GUI access
+export DISPLAY=:0
+export XAUTHORITY=/home/sms/.Xauthority
+
+sleep 5
+
 # 🔄 Start loading screen immediately
-chromium-browser --kiosk file:///home/sms/Echify-App/loading.html &
+chromium --kiosk file:///home/sms/Echify-App/loading.html &
 LOADING_PID=$!
 
 sleep 3
