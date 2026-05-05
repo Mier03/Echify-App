@@ -169,7 +169,7 @@ fi
 echo "✅ Button listener running"
 
 # ❌ Close loading screen before launching main app
-pkill -f "loading.html" 2>/dev/null
+sudo systemctl stop loading.service
 
 echo "🖥 Opening Chromium..."
 chromium \
