@@ -201,7 +201,7 @@ async def stt_live_endpoint(websocket: WebSocket):
         # IMPORTANT:
         # Check your terminal silent level.
         # If silence prints around 0.0120, set threshold around 0.018–0.020.
-        LOUD_THRESHOLD = 0.006
+        LOUD_THRESHOLD = 0.0002
         # Auto-transcribe after this many seconds of silence.
         SILENCE_SECONDS = 1.5
 
