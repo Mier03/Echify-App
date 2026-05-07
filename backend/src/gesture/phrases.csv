@@ -7,15 +7,24 @@ standalone,SORRY,Sorry.
 standalone,YES,Yes.
 standalone,NO,No.
 standalone,OKAY,Okay.
-standalone,GOOD,Good.
+standalone,GOOD,Good
 standalone,GOOD MORNING,Good morning!
 standalone,GOOD AFTERNOON,Good afternoon!
 question,WHAT|NAME,What is name?
 question,WHAT|NAME|YOU,What is your name?
 question,WHAT|YOU|NAME,What is your name?
+question,YOU|WHAT|NAME,What is your name?
+question,NAME|WHAT|YOU,What is your name?
+question,NAME|YOU|WHAT,What is your name?
+question,YOU|NAME|WHAT,What is your name?
 question,WHERE|FROM,Where from?
 question,WHERE|YOU|FROM,Where are you from?
 question,WHERE|FROM|YOU,Where are you from?
+question,YOU|WHERE|FROM,Where are you from?
+question,FROM|WHERE|YOU,Where are you from?
+question,FROM|YOU|WHERE,Where are you from?
+question,YOU|FROM|WHERE,Where are you from?
+question,YOU|FROM,You from?
 question,WHY|HERE,Why here?
 question,WHY|YOU|HERE,Why are you here?
 question,WHY|HERE|YOU,Why are you here?
@@ -23,17 +32,31 @@ question,HOW|YOU,How are you?
 question,YOU|HOW,How are you?
 question,HOW|YOU|TODAY,How are you today?
 question,HOW|TODAY,How today?
+question,YOU|HOW|TODAY,How are you today?
+question,TODAY|HOW|YOU,How are you today?
 question,WHAT|LIKE,What like?
 question,LIKE|WHAT,Like what?
 question,WHAT|YOU|LIKE,What do you like?
-question,WHAT|UNDERSTAND,What did you understand?
+question,YOU|WHAT|LIKE,What do you like?
+question,LIKE|YOU|WHAT,What do you like?
+question,WHAT|UNDERSTAND,What understand?
 question,WHAT|YOU|UNDERSTAND,What did you understand?
+question,YOU|UNDERSTAND,Do you understand?
+question,UNDERSTAND|YOU,Do you understand?
 question,WHO|ME|FRIEND,Who is my friend?
+statement,GOOD|MORNING,Good morning!
+statement,MORNING|GOOD,Good morning!
+statement,GOOD|AFTERNOON,Good afternoon!
+statement,AFTERNOON|GOOD,Good afternoon!
 statement,ME|NAME,My name.
 statement,I|LOVE|ME|FAMILY,I love my family.
 statement,LOVE|ME|FAMILY,Love my family.
 statement,I|NO|KNOW,I do not know.
 statement,NO|KNOW,Do not know.
+statement,THANKS|FRIEN,Thanks friend.
+statement,FRIEND|THANKS,Thanks friend.
+statement,PLEASE|THANKS|NO,Please don't say thanks.
+statement,PLEASE|NO|THANKS,Please don't say thanks.
 statement,PLEASE|GO|ME,Please go with me.
 statement,GO|ME,Go with me.
 statement,I|LOVE|YOU,I love you.
@@ -49,6 +72,8 @@ statement,I|WANT|SLEEP,I want to sleep.
 statement,WANT|SLEEP,Want to sleep.
 statement,I|WANT|EAT,I want to eat.
 statement,WANT|EAT,Want to eat.
+statement,I|WANT|GO,I want to go.
+statement,I|GO|WANT,I want to go.
 statement,I|WANT|GO|HOME,I want to go home.
 statement,WANT|GO|HOME,Want to go home.
 statement,GO|HOME,Go home.
@@ -63,8 +88,8 @@ statement,YES|WANT|HELP,Yes. Want help.
 statement,YES|I|WANT|HELP|YOU,Yes. I want to help you.
 statement,YES|WANT|HELP|YOU,Yes. Want to help you.
 statement,YES|I|LOVE|ME|FAMILY,Yes. I love my family.
-statement,YES|I|FROM|HERE,"Yes, I'm from here."
-statement,I|FROM|HERE,I'm from here.
+statement,YES|I|FROM|HERE,"Yes, I am from here."
+statement,I|FROM|HERE,I am from here.
 # EXISTING / NEW CSV PHRASES - kept after the moved hardcoded phrases
 question,WHO|YOU,Who are you?
 question,WHO|ME|FAMILY,Who is my family?
@@ -132,7 +157,7 @@ question,"WHAT|NAME","What is your name?"
 question,"WHAT|YOU|NAME","What is your name?"
 question,"WHERE|FROM","Where are you from?"
 question,"WHERE|YOU|FROM","Where are you from?"
-question,"WHY|HERE","Why are you here?"
+question,"WHY|HERE","Why here?"
 question,"WHY|YOU|HERE","Why are you here?"
 question,"HOW|YOU","How are you?"
 question,"HOW|YOU|TODAY","How are you today?"
