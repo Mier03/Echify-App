@@ -219,15 +219,7 @@ export default function MainScreen() {
       }
     };
   }, [activeTab]);
-
-const handleSpeechStart = () => {
-  if (isSpeechListening) return;
-
-  setSttText("Listening...");
-  setIsSpeechListening(true);
-  setIsRecording(false);
-  startSttListening();
-};
+  
 const handleSpeechToggle = () => {
   if (isSpeechListening) {
     setSttText("Transcribing...");
@@ -375,7 +367,7 @@ const handleSpeechToggle = () => {
                   <TouchableOpacity
                       style={[
                         styles.toggleButton,
-                        isSpeechListening ? styles.stopButton: styles.startButton,
+                        isSpeechListening ? styles.stopButton : styles.startButton,
                       ]}
                       onPress={handleSpeechToggle}
                     >
@@ -689,7 +681,4 @@ const styles = StyleSheet.create({
     borderColor: THEME.border,
     padding: 24,
   },
-  disabledButton: {
-  backgroundColor: THEME.muted,
-},
 });
