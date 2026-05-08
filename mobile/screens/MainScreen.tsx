@@ -12,6 +12,7 @@ import {
   closeSttSocket,
   connectSttSocket,
   startSttListening,
+  stopSttListening,
 } from "../services/stt";
 
 import AudioWave from "../components/AudioWave";
@@ -227,6 +228,20 @@ const handleSpeechStart = () => {
   setIsRecording(false);
   startSttListening();
 };
+const handleSpeechToggle = () => {
+  if (isSpeechListening) {
+    setSttText("Transcribing...");
+    stopSttListening(); // manually stop and transcribe now
+    setIsSpeechListening(false);
+    setIsRecording(false);
+    return;
+  }
+
+  setSttText("Listening...");
+  setIsSpeechListening(true);
+  setIsRecording(false);
+  startSttListening();
+};
 
   return (
     <View style={styles.container}>
@@ -362,11 +377,10 @@ const handleSpeechStart = () => {
                         styles.toggleButton,
                         isSpeechListening ? styles.disabledButton : styles.startButton,
                       ]}
-                      onPress={handleSpeechStart}
-                      disabled={isSpeechListening}
+                      onPress={handleSpeechToggle}
                     >
                       <Text style={styles.toggleButtonText}>
-                        {isSpeechListening ? "..." : "Start"}
+                        {isSpeechListening ? "Stop" : "Start"}
                       </Text>
                     </TouchableOpacity>
                 </View>

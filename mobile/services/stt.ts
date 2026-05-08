@@ -90,6 +90,22 @@ export const startSttListening = () => {
   }
 };
 
+export const stopSttListening = () => {
+  if (!sttSocket) {
+    console.log("⚠️ STT socket not available");
+    return;
+  }
+
+  if (sttSocket.readyState === WebSocket.OPEN) {
+    console.log("🛑 Sending STOP to STT");
+    sttSocket.send(JSON.stringify({ action: "stop" }));
+    pendingStart = false;
+    return;
+  }
+
+  console.log("⚠️ STT socket not open yet");
+};
+
 export const closeSttSocket = () => {
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
