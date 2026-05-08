@@ -375,7 +375,7 @@ const handleSpeechToggle = () => {
                   <TouchableOpacity
                       style={[
                         styles.toggleButton,
-                        isSpeechListening ? styles.disabledButton : styles.startButton,
+                        isSpeechListening ? styles.stopButton: styles.startButton,
                       ]}
                       onPress={handleSpeechToggle}
                     >
