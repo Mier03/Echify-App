@@ -365,16 +365,16 @@ const handleSpeechToggle = () => {
                   </View>
 
                   <TouchableOpacity
-                      style={[
-                        styles.toggleButton,
-                        isSpeechListening ? styles.stopButton : styles.startButton,
-                      ]}
-                      onPress={handleSpeechToggle}
-                    >
-                      <Text style={styles.toggleButtonText}>
-                        {isSpeechListening ? "Stop" : "Start"}
-                      </Text>
-                    </TouchableOpacity>
+                    style={[
+                      styles.toggleButton,
+                      isSpeechListening ? styles.stopButton : styles.startButton,
+                    ]}
+                    onPress={handleSpeechToggle}
+                  >
+                    <Text style={styles.toggleButtonText}>
+                      {isSpeechListening ? "Stop" : "Start"}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
