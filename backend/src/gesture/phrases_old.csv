@@ -1,4 +1,146 @@
 category,token_set,output
+# ===== HARDCODED PHRASES MOVED FROM PYTHON - KEEP AT TOP =====
+standalone,HELLO,Hello!
+standalone,GOODBYE,Goodbye!
+standalone,THANKS,Thank you.
+standalone,SORRY,Sorry.
+standalone,YES,Yes.
+standalone,NO,No.
+standalone,OKAY,Okay.
+standalone,GOOD,Good
+standalone,GOOD MORNING,Good morning!
+standalone,GOOD AFTERNOON,Good afternoon!
+question,WHAT|NAME,What is name?
+question,WHAT|NAME|YOU,What is your name?
+question,WHAT|YOU|NAME,What is your name?
+question,YOU|WHAT|NAME,What is your name?
+question,NAME|WHAT|YOU,What is your name?
+question,NAME|YOU|WHAT,What is your name?
+question,YOU|NAME|WHAT,What is your name?
+question,WHERE|FROM,Where from?
+question,WHERE|YOU|FROM,Where are you from?
+question,WHERE|FROM|YOU,Where are you from?
+question,YOU|WHERE|FROM,Where are you from?
+question,FROM|WHERE|YOU,Where are you from?
+question,FROM|YOU|WHERE,Where are you from?
+question,YOU|FROM|WHERE,Where are you from?
+question,YOU|FROM,You from?
+question,WHY|HERE,Why here?
+question,WHY|YOU|HERE,Why are you here?
+question,WHY|HERE|YOU,Why are you here?
+question,HOW|YOU,How are you?
+question,YOU|HOW,How are you?
+question,HOW|YOU|TODAY,How are you today?
+question,HOW|TODAY,How today?
+question,YOU|HOW|TODAY,How are you today?
+question,TODAY|HOW|YOU,How are you today?
+question,WHAT|LIKE,What like?
+question,LIKE|WHAT,Like what?
+question,WHAT|YOU|LIKE,What do you like?
+question,YOU|WHAT|LIKE,What do you like?
+question,LIKE|YOU|WHAT,What do you like?
+question,WHAT|UNDERSTAND,What understand?
+question,WHAT|YOU|UNDERSTAND,What did you understand?
+question,YOU|UNDERSTAND,Do you understand?
+question,UNDERSTAND|YOU,Do you understand?
+question,WHO|ME|FRIEND,Who is my friend?
+statement,GOOD|MORNING,Good morning!
+statement,MORNING|GOOD,Good morning!
+statement,GOOD|AFTERNOON,Good afternoon!
+statement,AFTERNOON|GOOD,Good afternoon!
+statement,ME|NAME,My name.
+statement,I|LOVE|ME|FAMILY,I love my family.
+statement,LOVE|ME|FAMILY,Love my family.
+statement,I|NO|KNOW,I do not know.
+statement,NO|KNOW,Do not know.
+statement,THANKS|FRIEN,Thanks friend.
+statement,FRIEND|THANKS,Thanks friend.
+statement,PLEASE|THANKS|NO,Please don't say thanks.
+statement,PLEASE|NO|THANKS,Please don't say thanks.
+statement,PLEASE|GO|ME,Please go with me.
+statement,GO|ME,Go with me.
+statement,I|LOVE|YOU,I love you.
+statement,LOVE|YOU,Love you.
+statement,I|LOVE|FAMILY,I love my family.
+statement,LOVE|FAMILY,Love family.
+statement,I|WANT|HELP,I want help.
+statement,WANT|HELP,Want help.
+statement,I|WANT|HELP|YOU,I want to help you.
+statement,WANT|HELP|YOU,Want to help you.
+statement,HELP|YOU,Help you.
+statement,I|WANT|SLEEP,I want to sleep.
+statement,WANT|SLEEP,Want to sleep.
+statement,I|WANT|EAT,I want to eat.
+statement,WANT|EAT,Want to eat.
+statement,I|WANT|GO,I want to go.
+statement,I|GO|WANT,I want to go.
+statement,I|WANT|GO|HOME,I want to go home.
+statement,WANT|GO|HOME,Want to go home.
+statement,GO|HOME,Go home.
+statement,YES|I|WANT|SLEEP,Yes. I want to sleep.
+statement,YES|WANT|SLEEP,Yes. Want to sleep.
+statement,YES|I|WANT|EAT,Yes. I want to eat.
+statement,YES|WANT|EAT,Yes. Want to eat.
+statement,YES|I|WANT|GO|HOME,Yes. I want to go home.
+statement,YES|WANT|GO|HOME,Yes. Want to go home.
+statement,YES|I|WANT|HELP,Yes. I want help.
+statement,YES|WANT|HELP,Yes. Want help.
+statement,YES|I|WANT|HELP|YOU,Yes. I want to help you.
+statement,YES|WANT|HELP|YOU,Yes. Want to help you.
+statement,YES|I|LOVE|ME|FAMILY,Yes. I love my family.
+statement,YES|I|FROM|HERE,"Yes, I am from here."
+statement,I|FROM|HERE,I am from here.
+# EXISTING / NEW CSV PHRASES - kept after the moved hardcoded phrases
+question,WHO|YOU,Who are you?
+question,WHO|ME|FAMILY,Who is my family?
+question,WHO|YOU|LIKE,Who do you like?
+question,WHO|YOU|LOVE,Who do you love?
+question,WHO|YOU|KNOW,Who do you know?
+question,WHO|HERE,Who is here?
+question,WHERE|YOU,Where are you?
+question,WHERE|HOME,Where is home?
+question,WHERE|ME|FAMILY,Where is my family?
+question,WHERE|ME|FRIEND,Where is my friend?
+question,WHERE|YOU|WANT|GO,Where do you want to go?
+question,WHERE|YOU|WANT|EAT,Where do you want to eat?
+question,WHERE|YOU|WANT|SLEEP,Where do you want to sleep?
+question,WHY|YOU|LIKE|ME,Why do you like me?
+question,WHY|YOU|LOVE|ME,Why do you love me?
+question,WHY|YOU|WANT|HELP,Why do you want help?
+question,WHY|YOU|WANT|GO|HOME,Why do you want to go home?
+question,WHY|YOU|WANT|EAT,Why do you want to eat?
+question,WHY|YOU|WANT|SLEEP,Why do you want to sleep?
+question,HOW|YOU|KNOW,How do you know?
+question,HOW|YOU|UNDERSTAND,How do you understand?
+question,HOW|I|GO|HOME,How do I go home?
+question,WHAT|YOU|KNOW,What do you know?
+question,YOU|UNDERSTAND,Do you understand?
+question,YOU|KNOW,Do you know?
+question,YOU|LIKE|ME,Do you like me?
+question,YOU|LOVE|ME,Do you love me?
+question,WHAT|ME|NAME,What is my name?
+statement,ME|FAMILY,My family.
+statement,ME|FRIEND,My friend.
+statement,ME|HOME,My home.
+statement,I|KNOW|ME|NAME,I know my name.
+statement,KNOW|ME|NAME,Know my name.
+statement,I|LIKE|ME|FAMILY,I like my family.
+statement,LIKE|ME|FAMILY,Like my family.
+statement,I|LIKE|ME|FRIEND,I like my friend.
+statement,LIKE|ME|FRIEND,Like my friend.
+statement,I|LOVE|ME|FRIEND,I love my friend.
+statement,LOVE|ME|FRIEND,Love my friend.
+statement,I|WANT|ME|FAMILY,I want my family.
+statement,WANT|ME|FAMILY,Want my family.
+statement,I|WANT|ME|FRIEND,I want my friend.
+statement,WANT|ME|FRIEND,Want my friend.
+statement,I|KNOW|ME|FAMILY,I know my family.
+statement,KNOW|ME|FAMILY,Know my family.
+statement,I|KNOW|ME|FRIEND,I know my friend.
+statement,KNOW|ME|FRIEND,Know my friend.
+
+
+# ===== USER 211 PHRASES ADDED BELOW HARDCODED PHRASES =====
 # STANDALONE / GREETINGS (already in code)
 standalone,"HELLO","Hello!"
 standalone,"GOODBYE","Goodbye!"
@@ -15,28 +157,36 @@ question,"WHAT|NAME","What is your name?"
 question,"WHAT|YOU|NAME","What is your name?"
 question,"WHERE|FROM","Where are you from?"
 question,"WHERE|YOU|FROM","Where are you from?"
-question,"WHY|HERE","Why are you here?"
+question,"WHY|HERE","Why here?"
 question,"WHY|YOU|HERE","Why are you here?"
 question,"HOW|YOU","How are you?"
 question,"HOW|YOU|TODAY","How are you today?"
-question,"HOW|TODAY","How are you today?"
-question,"WHAT|LIKE","What do you like?"
+question,"HOW|TODAY","How today?"
+question,"WHAT|LIKE","What like?"
+question,"LIKE|WHAT","Like what?"
 question,"WHAT|YOU|LIKE","What do you like?"
-question,"WHAT|UNDERSTAND","What did you understand?"
+question,"WHAT|UNDERSTAND","What understand?"
 question,"WHAT|YOU|UNDERSTAND","What did you understand?"
+question,"WHAT|UNDERSTAND|YOU","What did you understand?"
 # QUESTIONS (NEW)
 question,"WHO|YOU","Who are you?"
 question,"WHO|ME|FRIEND","Who is my friend?"
+question,"WHO|FRIEND|ME","Who is my friend?"
+question,"ME|FRIEND|WHO","Who is my friend?"
 question,"WHO|ME|FAMILY","Who is my family?"
+question,"WHO|FAMILY|ME","Who is my family?"
 question,"WHO|YOU|LIKE","Who do you like?"
 question,"WHO|YOU|LOVE","Who do you love?"
 question,"WHO|YOU|KNOW","Who do you know?"
 question,"WHO|HERE","Who is here?"
 question,"WHERE|YOU","Where are you?"
+question,"YOU|WHERE","Where are you?"
 question,"WHERE|HOME","Where is home?"
 question,"WHERE|ME|FAMILY","Where is my family?"
 question,"WHERE|ME|FRIEND","Where is my friend?"
 question,"WHERE|YOU|WANT|GO","Where do you want to go?"
+question,"WHERE|YOU|GO","Where are you going?"
+question,"YOU|GO|WHERE","Where are you going?"
 question,"WHERE|YOU|WANT|EAT","Where do you want to eat?"
 question,"WHERE|YOU|WANT|SLEEP","Where do you want to sleep?"
 question,"WHY|YOU|LIKE|ME","Why do you like me?"

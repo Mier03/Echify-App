@@ -11,12 +11,7 @@ standalone,GOOD,Good
 standalone,GOOD MORNING,Good morning!
 standalone,GOOD AFTERNOON,Good afternoon!
 question,WHAT|NAME,What is name?
-question,WHAT|NAME|YOU,What is your name?
 question,WHAT|YOU|NAME,What is your name?
-question,YOU|WHAT|NAME,What is your name?
-question,NAME|WHAT|YOU,What is your name?
-question,NAME|YOU|WHAT,What is your name?
-question,YOU|NAME|WHAT,What is your name?
 question,WHERE|FROM,Where from?
 question,WHERE|YOU|FROM,Where are you from?
 question,WHERE|FROM|YOU,Where are you from?
@@ -24,7 +19,7 @@ question,YOU|WHERE|FROM,Where are you from?
 question,FROM|WHERE|YOU,Where are you from?
 question,FROM|YOU|WHERE,Where are you from?
 question,YOU|FROM|WHERE,Where are you from?
-question,YOU|FROM,You from?
+question,YOU|FROM,You from? 
 question,WHY|HERE,Why here?
 question,WHY|YOU|HERE,Why are you here?
 question,WHY|HERE|YOU,Why are you here?
@@ -153,7 +148,7 @@ standalone,"GOOD","Good."
 standalone,"GOOD MORNING","Good morning!"
 standalone,"GOOD AFTERNOON","Good afternoon!"
 # QUESTIONS (already in code)
-question,"WHAT|NAME","What is your name?"
+question,"WHAT|NAME","What is name?"
 question,"WHAT|YOU|NAME","What is your name?"
 question,"WHERE|FROM","Where are you from?"
 question,"WHERE|YOU|FROM","Where are you from?"
