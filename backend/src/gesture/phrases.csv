@@ -14,46 +14,45 @@ question,WHAT|NAME,What is name?
 question,WHAT|YOU|NAME,What is your name?
 question,WHERE|FROM,Where from?
 question,WHERE|YOU|FROM,Where are you from?
-question,WHERE|FROM|YOU,Where are you from?
-question,YOU|WHERE|FROM,Where are you from?
-question,FROM|WHERE|YOU,Where are you from?
-question,FROM|YOU|WHERE,Where are you from?
-question,YOU|FROM|WHERE,Where are you from?
 question,YOU|FROM,You from? 
 question,WHY|HERE,Why here?
 question,WHY|YOU|HERE,Why are you here?
-question,WHY|HERE|YOU,Why are you here?
 question,HOW|YOU,How are you?
-question,YOU|HOW,How are you?
 question,HOW|YOU|TODAY,How are you today?
 question,HOW|TODAY,How today?
-question,YOU|HOW|TODAY,How are you today?
-question,TODAY|HOW|YOU,How are you today?
 question,WHAT|LIKE,What like?
 question,LIKE|WHAT,Like what?
 question,WHAT|YOU|LIKE,What do you like?
-question,YOU|WHAT|LIKE,What do you like?
-question,LIKE|YOU|WHAT,What do you like?
 question,WHAT|UNDERSTAND,What understand?
 question,WHAT|YOU|UNDERSTAND,What did you understand?
 question,YOU|UNDERSTAND,Do you understand?
-question,UNDERSTAND|YOU,Do you understand?
 question,WHO|ME|FRIEND,Who is my friend?
+question,"HOW|MORNING","How is morning?"
+question,"HOW|YOU|MORNING","How is morning?"
+question,"HOW|AFTERNOON","How is afternoon?"
+question,"HOW|YOU|AFTERNOON","How is your afternoon?"
+question,"WHERE|FRIEND","Where is friend?"
+question,"WHERE|ME|FRIEND","Where is my friend?"
+question,"WHAT|TODAY","What is today?"
+question,"WHERE|YOU|TODAY","Where are you today?"
 statement,GOOD|MORNING,Good morning!
-statement,MORNING|GOOD,Good morning!
 statement,GOOD|AFTERNOON,Good afternoon!
-statement,AFTERNOON|GOOD,Good afternoon!
+statement,"GOOD|TODAY","Today is good."
+statement,"I|KNOW|NAME","I know the name."
+statement,"I|LIKE|MORNING","I like the morning."
+statement,"I|LIKE|AFTERNOON","I like the afternoon."
+statement,"I|WANT|EAT|MORNING","I want to eat this morning."
+statement,"I|WANT|EAT|AFTERNOON","I want to eat this afternoon."
 statement,ME|NAME,My name.
 statement,I|LOVE|ME|FAMILY,I love my family.
 statement,LOVE|ME|FAMILY,Love my family.
 statement,I|NO|KNOW,I do not know.
 statement,NO|KNOW,Do not know.
-statement,THANKS|FRIEN,Thanks friend.
-statement,FRIEND|THANKS,Thanks friend.
-statement,PLEASE|THANKS|NO,Please don't say thanks.
+statement,THANKS|FRIEND,Thanks friend.
 statement,PLEASE|NO|THANKS,Please don't say thanks.
+statement,NO|THANKS,No thanks.
 statement,PLEASE|GO|ME,Please go with me.
-statement,GO|ME,Go with me.
+statement,ME|GO,Me go.
 statement,I|LOVE|YOU,I love you.
 statement,LOVE|YOU,Love you.
 statement,I|LOVE|FAMILY,I love my family.
@@ -68,7 +67,7 @@ statement,WANT|SLEEP,Want to sleep.
 statement,I|WANT|EAT,I want to eat.
 statement,WANT|EAT,Want to eat.
 statement,I|WANT|GO,I want to go.
-statement,I|GO|WANT,I want to go.
+statement,WANT|GO,Want to go.
 statement,I|WANT|GO|HOME,I want to go home.
 statement,WANT|GO|HOME,Want to go home.
 statement,GO|HOME,Go home.
@@ -162,26 +161,21 @@ question,"LIKE|WHAT","Like what?"
 question,"WHAT|YOU|LIKE","What do you like?"
 question,"WHAT|UNDERSTAND","What understand?"
 question,"WHAT|YOU|UNDERSTAND","What did you understand?"
-question,"WHAT|UNDERSTAND|YOU","What did you understand?"
 # QUESTIONS (NEW)
 question,"WHO|YOU","Who are you?"
 question,"WHO|ME|FRIEND","Who is my friend?"
-question,"WHO|FRIEND|ME","Who is my friend?"
-question,"ME|FRIEND|WHO","Who is my friend?"
 question,"WHO|ME|FAMILY","Who is my family?"
-question,"WHO|FAMILY|ME","Who is my family?"
+question,"WHO|I|FAMILY","Who is my family?"
 question,"WHO|YOU|LIKE","Who do you like?"
 question,"WHO|YOU|LOVE","Who do you love?"
 question,"WHO|YOU|KNOW","Who do you know?"
 question,"WHO|HERE","Who is here?"
 question,"WHERE|YOU","Where are you?"
-question,"YOU|WHERE","Where are you?"
 question,"WHERE|HOME","Where is home?"
 question,"WHERE|ME|FAMILY","Where is my family?"
 question,"WHERE|ME|FRIEND","Where is my friend?"
 question,"WHERE|YOU|WANT|GO","Where do you want to go?"
 question,"WHERE|YOU|GO","Where are you going?"
-question,"YOU|GO|WHERE","Where are you going?"
 question,"WHERE|YOU|WANT|EAT","Where do you want to eat?"
 question,"WHERE|YOU|WANT|SLEEP","Where do you want to sleep?"
 question,"WHY|YOU|LIKE|ME","Why do you like me?"
@@ -229,6 +223,9 @@ me_my,"GO|ME|FAMILY","Go with my family."
 me_my,"GO|ME|FRIEND","Go with my friend."
 me_my,"HELP|ME|FAMILY","Help my family."
 me_my,"HELP|ME|FRIEND","Help my friend."
+me_my,"ME|FRIEND|KNOW","My friend knows."
+me_my,"ME|FAMILY|KNOW","My family knows."
+me_my,"I|LIKE|ME|HOME","I like my home."
 # STATEMENTS (already in code)
 statement,"I|NO|KNOW","I do not know."
 statement,"NO|KNOW","Do not know."
@@ -354,3 +351,6 @@ yes_prefix,"YES|I|WANT|GO|HERE","Yes. I want to go here."
 yes_prefix,"YES|I|FROM|HOME","Yes. I'm from home."
 yes_prefix,"YES|I|LIKE|FRIEND","Yes. I like my friend."
 yes_prefix,"YES|I|LOVE|FRIEND","Yes. I love my friend."
+yes_prefix,"YES|GOOD|MORNING","Yes. Good morning."
+yes_prefix,"YES|GOOD|AFTERNOON","Yes. Good afternoon."
+yes_prefix,"YES|I|KNOW|NAME","Yes. I know the name."
