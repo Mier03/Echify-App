@@ -84,22 +84,7 @@ if [ ! -e /dev/video10 ]; then
     exit 1
 fi
 
-echo "🔨 Building Web UI..."
-cd "$BASE_DIR/mobile" || exit 1
-rm -rf "$BASE_DIR/mobile/dist"
-npx expo export -p web --clear
-
-if [ $? -ne 0 ]; then
-    echo "❌ Web build failed"
-    exit 1
-fi
-
-if [ ! -f "$BASE_DIR/mobile/dist/index.html" ]; then
-    echo "❌ dist/index.html not found after build"
-    exit 1
-fi
-
-echo "✅ Web UI built successfully"
+#BUILD
 
 echo "🌐 Starting Web Server..."
 cd "$BASE_DIR/mobile/dist" || exit 1
